@@ -1,0 +1,54 @@
+<program>
+	<program_user_events> 
+		<geometry_user_events>
+			<method_user_events>
+				<tool_user_events>
+					<operations_group_user_events>
+						<operation>
+							<tool_change>
+							</tool_change>
+							<operation_events>
+								<movement>
+								</movement>
+							</operation_events>
+						</operation>
+					<operations_group_user_events>
+				</tool_user_events>
+			</method_user_events>
+		</geometry_user_events>
+	</program_user_events>
+</program>
+
+т.к. из CLSF данное дерево восстановить невозможно используем следующее
+
+<program>
+	*(
+	<UDE>
+		*<command/>
+	</UDE>
+	|
+	<tool_path tool_data msys rpm>
+		*<UDE/>
+		*(
+		<engage cutcom>
+			*<command/>
+		</engage>
+		|
+		<work> здесь мы не можем переключать коррекцию т.к. произойдет зарез
+			*<command/>
+		</work>
+		|
+		<retract cutcom>
+			*<command/>
+		</retract>
+		|
+		<rapid>
+			*<command/>
+		</rapid>
+		)
+		*<UDE/>
+	</tool_path>
+	*<UDE/>
+	)
+</program>
+
