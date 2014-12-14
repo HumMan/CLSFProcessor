@@ -1,0 +1,20 @@
+proc  GMO_DIRPP(var real vec0[3],var real vec1[3],var real direction[3])
+;direction (DIR) from point (P0) to point (P1)
+;direction = (p1-p0).GetNormalized()
+
+def real length=0;
+def int axis_id
+
+for axis_id=0 to 2 
+direction[axis_id]=vec1[axis_id]-vec0[axis_id]
+length=length+POT(direction[axis_id])
+endfor
+
+length=sqrt(length)
+
+for axis_id=0 to 2 
+direction[axis_id]=direction[axis_id]/length
+endfor
+
+ret
+

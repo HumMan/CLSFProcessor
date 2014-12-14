@@ -1,0 +1,48 @@
+PROC GMO_GAUG
+
+DEF int err
+def sring results[255]
+def sring result_x[255]
+def sring result_y[255]
+def sring result_z[255]
+def sring result_ang[255]
+
+def real poz_x[36]
+def real poz_y[36]
+def real poz_z[36]
+def real poz_ang[36]
+
+def int num_str
+def int num_x
+def int num_y
+def int num_z
+def int num_ang
+
+
+ FOR num_str=1 TO 36
+
+  READ(err, "STEP_RES", num_str, 36, results)
+   
+  num_x=index(results, "X")
+  num_y=index(results, "Y")
+  num_z=index(results, "Z")
+  num_ang=index(results, "ANG")
+
+  result_ang=substr(results, num_ang+3, num_x-1)
+  result_x=substr(results, num_x+1, num_y-1)
+  result_y=substr(results, num_y+1, num_z-1)
+  result_z=substr(results, num_z+1)
+
+  poz_x[num_str-1]=number(results_x)
+  poz_y[num_str-1]=number(results_y)
+  poz_z[num_str-1]=number(results_z)
+  poz_ang[num_str-1]=number(results_ang)
+
+write(err, "proverka_1", <<poz_x[num_str-1])
+write(err, "proverka_1", <<poz_y[num_str-1])
+write(err, "proverka_1", <<poz_z[num_str-1])
+write(err, "proverka_1", <<poz_ang[num_str-1])
+ 
+ENDFOR
+
+

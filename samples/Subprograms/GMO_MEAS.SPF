@@ -1,0 +1,16 @@
+PROC GMO_MEAS(var real dir[3],var real distance,var real contact[3])
+
+extern  GMO_MADD(var real[3],var real[3],real,var real[3])
+
+meas=-1 g01f100 x=meas_end_pos[0] y=meas_end_pos[1] z=meas_end_pos[2]
+
+IF $AC_MEA[1]==1
+contact[0]=set($AA_MW1[X],$AA_MW1[y],$AA_MW1[z])
+else
+contact[0]=set(0,0,0)
+endif
+
+GMO_MOVE(pre_pos,5000)
+
+RET
+

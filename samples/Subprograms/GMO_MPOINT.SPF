@@ -1,0 +1,38 @@
+PROC GMO_MPOINT(var real meas_pos[3],var real normal[3],var real contact[3])
+;normal - normal to surface
+
+extern  GMO_SAFEMOVE(var real[3],real)
+extern  GMO_MOVE(var real[3],real)
+extern  GMO_MADD(var real[3],var real[3],real,var real[3])
+
+DEF REAL FAST_MOVE_FEED=4000
+DEF REAL PRE_COLL_FEED=2000
+DEF REAL MEAS_FEED=200
+
+def real pre_dist=3
+def real meas_start=2
+def real meas_end=-0.5
+def real pre_pos[3]
+def real meas_start_pos[3]
+def real meas_end_pos[3]
+def int axis_id
+
+GMO_MADD(meas_pos,normal,pre_dist,pre_pos)
+GMO_MADD(meas_pos,normal,meas_start,meas_start_pos)
+GMO_MADD(meas_pos,normal,meas_end,meas_end_pos)
+
+GMO_SAFEMOVE(pre_pos,5000)
+GMO_SAFEMOVE(meas_start_pos,5000)
+
+meas=-1 g01f100 x=meas_end_pos[0] y=meas_end_pos[1] z=meas_end_pos[2]
+
+IF $AC_MEA[1]==1
+contact[0]=set($AA_MW1[X],$AA_MW1[y],$AA_MW1[z])
+else
+contact[0]=set(0,0,0)
+endif
+
+GMO_MOVE(pre_pos,5000)
+
+RET
+

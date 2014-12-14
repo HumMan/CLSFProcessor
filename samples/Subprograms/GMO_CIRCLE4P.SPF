@@ -1,0 +1,57 @@
+PROC GMO_CIRCLE4P(var real circle_center[3], real probe_diameter, real circle_diameter, var real measured_center[3], var real measured_diameter)
+
+extern  GMO_MPOINT(var real[3],var real[3],var real[3])
+extern  GMO_SAFEMOVE(var real[3],real)
+extern  GMO_MOVE(var real[3],real)
+extern  GMO_VLEN(var real[3],var real)
+
+def real center_y[3]
+def real center_x[3]
+def real vec0[3]
+def real vec0_norm[3]=set(0,-1,0)
+def real vec1[3]
+def real vec0_norm[3]=set(0,1,0)
+def real vec0_meas[3]
+def real vec1_meas[3]
+def real vec2[3]
+def real vec2_norm[3]=set(-1,0,0)
+def real vec3[3]
+def real vec3_norm[3]=set(1,0,0)
+def real vec2_meas[3]
+def real vec3_meas[3]
+
+def real norm_vec[3]
+def real res_vec[3]
+
+
+
+GMO_SAFEMOVE(circle_center, 3000)
+vec0=set(circle_center[0],circle_center[1]+circle_diameter*0.5,circle_center[2])
+vec1=set(circle_center[0],circle_center[1]-circle_diameter*0.5,circle_center[2])
+GMO_MPOINT(vec0,vec0_norm,vec0_meas)
+GMO_MOVE(circle_center, 7000)
+GMO_MPOINT(vec1,vec1_norm,vec1_meas)
+GMO_MOVE(circle_center, 7000)
+center_y=set((vec0_meas[0]+vec1_meas[0])/2.0,(vec0_meas[1]+vec1_meas[1])/2.0, (vec0_meas[2]+vec1_meas[2])/2.0)
+
+GMO_SAFEMOVE(center_y, 1000)
+vec2=set(circle_center[0]+circle_diameter*0.5,center_y[1],circle_center[2])
+vec3=set(circle_center[0]-circle_diameter*0.5,center_y[1],circle_center[2])
+GMO_MPOINT(vec2,vec2_norm,vec2_meas)
+GMO_MOVE(circle_center, 7000)
+GMO_MPOINT(vec3,vec3_norm,vec3_meas)
+GMO_MOVE(circle_center, 7000)
+center_x=set((vec2_meas[0]+vec3_meas[0])/2.0,(vec2_meas[1]+vec3_meas[1])/2.0, (vec2_meas[2]+vec3_meas[2])/2.0)
+
+measured_center=set(center_x[0], center_y[1], (center_x[2]+center_y[2])*0.5)
+GMO_MOVE(measured_center, 2000)
+
+  
+   norm_vec=set(measured_center[0]-vec0[0],measured_center[1]-vec0[1], measured_center[2]-vec0[2])
+   GMO_VLEN(norm_vec,res_vec)
+
+
+
+measured_diameter=set
+
+ret

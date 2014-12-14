@@ -1,0 +1,12 @@
+PROC GMO_SAFEMOVE(var real target_pos[3],real feed)
+def int coll_res
+;repeat
+meas=-1 g01f=feed x=target_pos[0] y=target_pos[1] z=target_pos[2]
+if $AC_MEA[1]==1
+msg("Collision!")
+m0
+endif
+;until coll_res==1
+
+RET
+
