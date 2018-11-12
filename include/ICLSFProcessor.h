@@ -49,8 +49,8 @@ public:
 	ICLSFProcessor();
 	~ICLSFProcessor();
 
-	//int CLSFToGCode(const char* use_machine_config,char*const use_clsf,const char** result_gcode,const char* ext_header,const char* prog_id,double &fast_movement_time,double &work_movement_time);
-	//int CLSFFileToGCodeFile(const char* use_machine_config,const wchar_t* use_clsf_path,const wchar_t* result_gcode_path,const char* ext_header,const char* prog_id,double &fast_movement_time,double &work_movement_time);
+	int CLSFToGCode(const char* use_machine_config,char*const use_clsf,const char** result_gcode,const char* ext_header,const char* prog_id,double &fast_movement_time,double &work_movement_time);
+	int CLSFFileToGCodeFile(const char* use_machine_config,const wchar_t* use_clsf_path,const wchar_t* result_gcode_path,const char* ext_header,const char* prog_id,double &fast_movement_time,double &work_movement_time);
 	
 	int CLSFToMeasCode(char*const use_clsf,const char** result_gcode,double min_step);
 	int CLSFFileToMeasCodeFile(const wchar_t* use_clsf_path,const wchar_t* result_gcode_path,double min_step);

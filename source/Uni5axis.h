@@ -1,167 +1,206 @@
-#pragma once
 
-#include <Eigen/Dense>
-#include <vector>
-#include <pugixml.hpp>
+#include "ATPConfiguration.h"
+namespace PrimitiveMask
+{
+	enum Enum:unsigned int
+	{
+		LINE=1,
+		CIRCLE=2,
+	};
+}
 
-using namespace Eigen;
-using namespace std;
+namespace TMovementMode
+{
+	enum Enum
+	{
+		Rapid,
+		Linear,
+		CircleCCW,
+		CircleCW
+	};
+}
 
+template<class T>
+struct TToolOrientation
+{
+	TVec<T,3> pos,dir;
+};
+
+template<class T>
+struct TKinematics
+{
+	TVec<T,3> pos;
+	T 
+		A,  //
+		C;  //
+	bool any_C;
+};
+
+template<class T>
+struct TKinematicsPair
+{
+	TKinematics<T> variant[2];//варианты кинематики станка
+	bool valid[2];			//вариант кинематики физически реализуем
+
+	bool any_C;//ось А вертикальна -> значение C может быть любое
+};
+
+template<class T>
+struct TMachineState
+{
+	PrimitiveMask::Enum mask;
+	string auxfun;
+	TVec<T,3> center,normal;
+	T radius;
+	int spiral_times;
+	T feed;
+	T spndl_rpm;
+	bool clw;//TODO разобраться с парсингом а то глючит
+	bool rapid;
+	int color;
+	bool base_element;//если true - элемент нельзя убрать при компрессии т.к. он исходный(существовавший до разбиения)
+	int cutcom;
+	string path_name;
+};
+
+template<class T>
+struct TToolMovementElement:public TMachineState<T>,TKinematics<T>
+{
+	TToolOrientation<T> tool_orient;
+	T move_time;
+	T move_distance;
+	T contour_correct_feed;
+};
+
+template<class T>
 class TMovementNode
 {
 public:
-	bool is_part_node;//иначе tool_node
-	bool is_linear;//иначе поворотное звено
-	Vector3d axis_offset;
-	Vector3d axis;
-	Vector3d offset;//вектор смещения с направлением от текущего звена к следующему (привязан к текущему звену)
+	bool part_node;//иначе tool_node
+	bool linear;//иначе поворотное звено
+	TVec<T,3> axis_offset;
+	TVec<T,3> axis;
+	TVec<T,3> offset;//вектор смещения с направлением от текущего звена к следующему (привязан к текущему звену)
 
 	TMovementNode(){}
-	TMovementNode(bool use_part_node,bool use_linear,Vector3d use_axis_offset,Vector3d use_axis,Vector3d use_offset=Vector3d(0.0))
-		:is_part_node(use_part_node)
-		,is_linear(use_linear)
+	TMovementNode(bool use_part_node,bool use_linear,TVec<T,3> use_axis_offset,TVec<T,3> use_axis,TVec<T,3> use_offset=TVec<T,3>(0))
+		:part_node(use_part_node)
+		,linear(use_linear)
 		,axis_offset(use_axis_offset)
 		,axis(use_axis)
 		,offset(use_offset){}
 };
 
-typedef double TKinematics[5];
-
-struct TKinematicsPair
-{
-	TKinematics variant[2];//варианты кинематики станка
-	bool has_undet_coord;//ось А вертикальна -> значение C может быть любое
-	int undet_coord_id;
-};
-
-Vector3d ExtractV3d(pugi::xml_node node)
-{
-	return Vector3d(node.attribute("x").as_double(),node.attribute("y").as_double(),node.attribute("z").as_double());
-}
-
-void PackV3d(const Vector3d& v,pugi::xml_node node)
-{
-	node.append_attribute("x")=v[0];
-	node.append_attribute("y")=v[1];
-	node.append_attribute("z")=v[2];
-}
-
-double AngleBetween(Vector3d v0, Vector3d v1)
-{
-	return acos((v0.norm()*v1.norm())/(v0.dot(v1)));
-}
-
-double AngleFromDir(const Vector2d& v)
-{
-	return atan2(v[1],v[0]);
-}
-
-class TUniversal5axis
+template<class T>
+class TUniversal5axis:public TCommonProperties<T>
 {
 private:
-	Matrix3d part_system;
-	vector<TMovementNode> nodes;//from part to tool
-	Vector3d mach_tool_dir;
-	double tool_length;
+	TMatrix<T,3> part_system;
+	const static int nodes_count=5;//всегда такое для 5координатных станков
+	TMovementNode<T> nodes[nodes_count];//0 - part  4 - tool
+	TVec<T,3> Tool_dir;
+	int X_id;
+	int Y_id;
+	int Z_id;
+	int A_id;
+	int C_id;
 public:
-	TUniversal5axis(pugi::xml_node ini_params, double use_tool_length=0)
+	TUniversal5axis(std::map<string,string> &ini_params):TCommonProperties(ini_params)
 	{
 		//TODO добавить проверки правильности кинематик (1- количество линейных и угловых звеньев 2- ось инструмента должна лежать в плоскости поворота последней оси
-		tool_length=use_tool_length;
-		int version=ini_params.child("version").attribute("id").as_int();
-		ini_params=ini_params.child("params");
-		if(version==1)
-		{
-			pugi::xml_node 
-				part_x=ini_params.child("part_system_x"),
-				part_y=ini_params.child("part_system_y"),
-				part_z=ini_params.child("part_system_z");
-			part_system.col(0)=ExtractV3d(part_x);
-			part_system.col(1)=ExtractV3d(part_y);
-			part_system.col(2)=ExtractV3d(part_z);
 
-			pugi::xml_node nodes=ini_params.child("nodes");
-			for (pugi::xml_node_iterator it = nodes.begin(); it != nodes.end(); ++it)
-			{
-				TMovementNode n;
-				n.is_part_node=it->child("is_part_node").attribute("value").as_bool();
-				n.is_linear=it->child("is_linear").attribute("value").as_bool();
-				n.axis_offset=ExtractV3d(it->child("axis_offset"));
-				n.axis=ExtractV3d(it->child("axis"));
-				n.offset=ExtractV3d(it->child("offset"));
-			}
-			mach_tool_dir=ExtractV3d(ini_params.child("tool_dir"));
-		}else 
-			throw "Not supported ini_params.xml version!";
+		part_system=TMatrix<T,3>
+			(
+			ParseVec(ini_params["part_system0"]),
+			ParseVec(ini_params["part_system1"]),
+			ParseVec(ini_params["part_system2"])
+			);
+		//
+		X_id=atoi(ini_params["X_id"].c_str());
+		Y_id= atoi(ini_params["Y_id"].c_str());
+		Z_id=atoi(ini_params["Z_id"].c_str());
+		A_id=atoi(ini_params["A_id"].c_str());
+		C_id=atoi(ini_params["C_id"].c_str());
+
+		for(int i=0;i<5;i++)
+		{
+			char buf[20];
+			sprintf(buf,"node%i_part_node",i);
+			nodes[i].part_node=atoi(ini_params[buf].c_str());
+			sprintf(buf,"node%i_linear",i);
+			nodes[i].linear=atoi(ini_params[buf].c_str());
+			sprintf(buf,"node%i_axis_offset",i);
+			nodes[i].axis_offset=ParseVec(ini_params[buf].c_str());
+			sprintf(buf,"node%i_axis",i);
+			nodes[i].axis=ParseVec(ini_params[buf].c_str());
+			sprintf(buf,"node%i_offset",i);
+			nodes[i].offset=ParseVec(ini_params[buf].c_str());
+		}
+		//tool
+		Tool_dir=ParseVec(ini_params["Tool_dir"].c_str());
+
 	}
-	void SetToolLength(double use_tool_length)
-	{
-		tool_length=use_tool_length;
-	}
-	Vector3d ForwardLinearNode(Vector3d p,Vector3d axis, double value)
+
+	TVec<T,3> ForwardLinearNode(TVec<T,3> p,TVec<T,3> axis, T value)
 	{
 		return p+axis*value;
 	}
-	Vector3d InverseLinearNode(Vector3d machine_p,Vector3d axis, double value)
+	TVec<T,3> InverseLinearNode(TVec<T,3> machine_p,TVec<T,3> axis, T value)
 	{
 		return machine_p-axis*value;
 	}
 
-	Vector3d ForwardRotateNode(Vector3d p,Vector3d off,Vector3d axis, double angle)
+	TVec<T,3> ForwardRotateNode(TVec<T,3> p,TVec<T,3> off,TVec<T,3> axis, T angle)
 	{
-		AngleAxis<double> aa(angle, axis);
-		return aa*(p-off)+off;
+		return (p-off).GetRotated(axis,angle)+off;
 	}
-	Vector3d InverseRotateNode(Vector3d machine_p,Vector3d off,Vector3d axis, double angle)
+	TVec<T,3> InverseRotateNode(TVec<T,3> machine_p,TVec<T,3> off,TVec<T,3> axis, T angle)
 	{
-		AngleAxis<double> aa(-angle, axis);
-		return aa*(machine_p-off)+off;
+		return (machine_p-off).GetRotated(axis,-angle)+off;
 	}
 
-	Vector3d ForwardRotateNode(Vector3d dir,Vector3d axis, double angle)
+	TVec<T,3> ForwardRotateNode(TVec<T,3> dir,TVec<T,3> axis, T angle)
 	{
-		AngleAxis<double> aa(angle, axis);
-		return aa*dir;
+		return dir.GetRotated(axis,angle);
 	}
-	Vector3d InverseRotateNode(Vector3d machine_dir,Vector3d axis, double angle)
+	TVec<T,3> InverseRotateNode(TVec<T,3> machine_dir,TVec<T,3> axis, T angle)
 	{
-		AngleAxis<double> aa(-angle, axis);
-		return aa*machine_dir;
+		return machine_dir.GetRotated(axis,-angle);
 	}
 
 	//a0,a1 - углы на которые надо повернуть вектор p вокруг оси curr чтобы он полностью оказался в плоскости перпенидкулярной next
 	//result - false если такого поворота не существует
 	//any_rotation - вектор curr лежит в плоскости перпенд. next и совпадает с вектором curr
-	bool GetRotationToNextPlane(Vector3d curr,Vector3d next, Vector3d p, double rotations[], bool &any_rotation)
+	bool GetRotationToNextPlane(TVec<T,3> curr,TVec<T,3> next, TVec<T,3> p, T rotations[], bool &any_rotation)
 	{
 		//TODO надо математическки провверить а то что-то не сходится
-		Vector3d _z=curr;
-		Vector3d _y=(curr.cross(next)).normalized();
-		Vector3d _x=_y.cross(curr);
+		TVec<T,3> _z=curr;
+		TVec<T,3> _y=curr.Cross(next).GetNormalized();
+		TVec<T,3> _x=_y.Cross(curr);
 
-		double gamma = AngleBetween(next,_x);
-		Vector2d d(p.dot(_x),p.dot(_y));
-		if(d.squaredNorm()<0.0000001)any_rotation=true;
+		T gamma = TVec<T,3>::AngleBetween(next,_x);
+		TVec<T,2> d(p*_x,p*_y);
+		if(d.SqrLength()<sqr(0.00001))any_rotation=true;
 		else any_rotation=false;
-		double alpha = any_rotation?0:AngleFromDir(d.normalized());
+		T alpha = any_rotation?0:AngleFromDir(d.GetNormalized());
 		if(alpha<0)alpha=2*M_PI+alpha;
-		double cone_angle= AngleBetween(curr,p);
+		T cone_angle= TVec<T,3>::AngleBetween(curr,p);
 		if(gamma>cone_angle)return false;
 		if(!any_rotation)
 		{
-			double betta =  acos((curr.dot(next)>0?-1:1)*gamma/cone_angle);
+			T betta =  acos((curr*next>0?-1:1)*gamma/cone_angle);
 			rotations[0] = betta - alpha;
 			rotations[1] = 2*M_PI - betta - alpha;
 		}
 	}
 
 	//на какой угол надо повернуть v0 вокруг axis чтобы совместить его с v1
-	double AngleBetweenVectors(Vector3d axis,Vector3d v0,Vector3d v1)
+	T AngleBetweenVectors(TVec<T,3> axis,TVec<T,3> v0,TVec<T,3> v1)
 	{
-		//double result = Vector3d::AngleBetween(v0,v1);
-		//if(v1*(axis.cross(v0))<0)result=-result;
+		//T result = TVec<T,3>::AngleBetween(v0,v1);
+		//if(v1*(axis.Cross(v0))<0)result=-result;
 		//return result;
-		return atan2(axis.dot(v0.cross(v1)),v0.dot(v1));
+		return atan2(axis*(v0.Cross(v1)),v0*v1);
 	}
 
 	///////////////////
@@ -169,101 +208,98 @@ public:
 
 	//вектор направления инструмента в системе координат детали для заданных машинных угловых координат
 	//направлен от фланца к концу инструмента
-	Vector3d GetToolDirFromMachineToolKinematics(double* coords)
+	TVec<T,3> GetToolDirFromMachineToolKinematics(T use_B,T use_C)
 	{
-		Vector3d p(mach_tool_dir);
+		T angles[5];
+		angles[A_id]=use_B;
+		angles[C_id]=use_C;
+		TVec<T,3> p(Tool_dir);
 		//
-		for(int i=nodes.size()-1;i>=0;i--)
+		for(int i=nodes_count-1;i>=0;i--)
 		{
-			if(nodes[i].is_part_node)
+			if(nodes[i].part_node)
 			{
-				if(!nodes[i].is_linear)
-					p=InverseRotateNode(p,nodes[i].axis,coords[i]);
+				if(!nodes[i].linear)
+					p=InverseRotateNode(p,nodes[i].axis,angles[i]);
 			}else
 			{
-				if(!nodes[i].is_linear)
-					p=ForwardRotateNode(p,nodes[i].axis,coords[i]);
+				if(!nodes[i].linear)
+					p=ForwardRotateNode(p,nodes[i].axis,angles[i]);
 			}
 		}
 		//
-		p=part_system.transpose()*p;
+		p=part_system.TransMul(p);
 		//
 		return p;
 	}
 
-	Vector3d ToMachineToolKinematics(Vector3d tool_pos,double* coord)
+	TVec<T,3> ToMachineToolKinematics(TVec<T,3> tool_pos,T use_A,T use_C)
 	{
-		Vector3d tool_dir=GetToolDirFromMachineToolKinematics(coord);
+		//assert(false);//TODO проверить а то координаты косячные
+		int curr_rot_node=0;
+		int rotation_node_id[2];//TODO можно заранее задать
+		for(int i=0;i<nodes_count;i++)
+			if(!nodes[i].linear)
+				rotation_node_id[curr_rot_node++]=i;
+
+		TVec<T,3> tool_dir=GetToolDirFromMachineToolKinematics(use_A,use_C);
 		//TODO починить везде
 		tool_pos=part_system*(tool_pos-tool_dir*tool_length);
-		
-		int curr_rot_node=0;
-		int curr_lin_node=0;
-		int rotation_node_id[2];//TODO можно заранее задать
-		int linear_node_id[3];
-		for(int i=0;i<nodes.size();i++)
-			if(!nodes[i].is_linear)
-				rotation_node_id[curr_rot_node++]=i;
-			else 
-				linear_node_id[curr_lin_node++]=i;
 
-		Vector3d lin_axis_rotated[5];
-		Vector3d p(0.0);
-		for(int i=nodes.size()-1;i>=0;i--)
+		TVec<T,3> lin_axis_rotated[5];
+		TVec<T,3> p(0);
+		for(int i=nodes_count-1;i>=0;i--)
 		{
-			if(nodes[i].is_part_node)
+			if(nodes[i].part_node)
 			{
-				if(nodes[i].is_linear)
+				if(nodes[i].linear)
 				{
 					p-=nodes[i].offset;
 				}
 				else
 				{
 					p-=nodes[i].offset;
-					p=InverseRotateNode(p,nodes[i].axis,coord[i]);	
+					p=InverseRotateNode(p,nodes[i].axis,(rotation_node_id[0]==i)?use_C:use_A);	
 				}
 			}else
 			{
-				if(nodes[i].is_linear)
+				if(nodes[i].linear)
 				{
 					p+=nodes[i].offset;
 				}
 				else
 				{
 					p+=nodes[i].offset;
-					p=ForwardRotateNode(p,nodes[i].axis,coord[i]);
+					p=ForwardRotateNode(p,nodes[i].axis,(rotation_node_id[0]==i)?use_C:use_A);
 				}
 			}
 		}
-		for(int i=0;i<nodes.size();i++)
+		for(int i=0;i<nodes_count;i++)
 		{
-			if(!nodes[i].is_linear)continue;
+			if(!nodes[i].linear)continue;
 			lin_axis_rotated[i]=nodes[i].axis;
 			for(int k=1;k>=0;k--)
 				if(rotation_node_id[k]<i)
 				{
-					if(nodes[rotation_node_id[k]].is_part_node)
-						lin_axis_rotated[i]=InverseRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,coord[i]);
+					if(nodes[rotation_node_id[k]].part_node)
+						lin_axis_rotated[i]=InverseRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,k==0?use_C:use_A);
 					else
-						lin_axis_rotated[i]=ForwardRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,coord[i]);
+						lin_axis_rotated[i]=ForwardRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,k==0?use_C:use_A);
 				}
 		}
-		Matrix3d m;
-		m.col(0)=lin_axis_rotated[linear_node_id[0]];
-		m.col(1)=lin_axis_rotated[linear_node_id[1]];
-		m.col(2)=lin_axis_rotated[linear_node_id[2]];
-		m.inverse();
+		TMatrix<T,3> m(lin_axis_rotated[X_id],lin_axis_rotated[Y_id],lin_axis_rotated[Z_id]);
+		m.Invert();
 		return m*(tool_pos-p);
 	}
 
-	void ToMachineToolKinematics(Vector3d tool_pos,Vector3d tool_dir,
-		TKinematicsPair& result)
+	void ToMachineToolKinematics(TVec<T,3> tool_pos,TVec<T,3> tool_dir,
+		TKinematicsPair<T>& result)
 		//use_fixed_C - используется для определения any_C, на выходе конкретная кинематика для данного fixed_C (должен быть от 0 до pi)
 	{
 		int curr_rot_node=0;
 		int rotation_node_id[2];//TODO можно заранее задать
-		for(int i=0;i<nodes.size();i++)
-			if(!nodes[i].is_linear)
+		for(int i=0;i<nodes_count;i++)
+			if(!nodes[i].linear)
 				rotation_node_id[curr_rot_node++]=i;
 
 		tool_dir=part_system*tool_dir;
@@ -272,28 +308,27 @@ public:
 		tool_pos=part_system*tool_pos-tool_dir*tool_length;
 		//получаем 2 варианта положений поворотных осей
 
-		double c[2]={0,0};
-		GetRotationToNextPlane(nodes[rotation_node_id[0]].axis,nodes[rotation_node_id[1]].axis,tool_dir,c,result.has_undet_coord);
+		T c[2]={0,0};
+		GetRotationToNextPlane(nodes[rotation_node_id[0]].axis,nodes[rotation_node_id[1]].axis,tool_dir,c,result.any_C);
 
-		Vector3d _tool_dir[2];
+		TVec<T,3> _tool_dir[2];
 		for(int i=0;i<2;i++)
 		{
-			AngleAxis<double> aa(c[i], nodes[rotation_node_id[0]].axis);
-			_tool_dir[i]=aa*tool_dir;
+			_tool_dir[i]=tool_dir.GetRotated(nodes[rotation_node_id[0]].axis,c[i]);
 		}
 
 		//если поворотное звено находится в ветви инструмента то его надо будет поворачивать в противоположную сторону
-		if(!nodes[rotation_node_id[0]].is_part_node)
+		if(!nodes[rotation_node_id[0]].part_node)
 		{
 			c[0]=-c[0];
 			c[1]=-c[1];
 		}
 
-		double b[2]={0,0};
+		T b[2]={0,0};
 		for(int i=0;i<2;i++)
-			b[i]=AngleBetweenVectors(nodes[rotation_node_id[1]].axis,_tool_dir[i],tool_dir);
+			b[i]=AngleBetweenVectors(nodes[rotation_node_id[1]].axis,_tool_dir[i],Tool_dir);
 
-		if(!nodes[rotation_node_id[1]].is_part_node)
+		if(!nodes[rotation_node_id[1]].part_node)
 		{
 			b[0]=-b[0];
 			b[1]=-b[1];
@@ -302,13 +337,13 @@ public:
 		//составляем матрицу преобразования перемещений линейных осей для двух вариантов кинематики
 		for(int v=0;v<2;v++)
 		{
-			Vector3d lin_axis_rotated[5];
-			Vector3d p(0.0);
-			for(int i=nodes.size()-1;i>=0;i--)
+			TVec<T,3> lin_axis_rotated[5];
+			TVec<T,3> p(0);
+			for(int i=nodes_count-1;i>=0;i--)
 			{
-				if(nodes[i].is_part_node)
+				if(nodes[i].part_node)
 				{
-					if(nodes[i].is_linear)
+					if(nodes[i].linear)
 					{
 						p-=nodes[i].offset;
 					}
@@ -319,7 +354,7 @@ public:
 					}
 				}else
 				{
-					if(nodes[i].is_linear)
+					if(nodes[i].linear)
 					{
 						p+=nodes[i].offset;
 					}
@@ -330,79 +365,96 @@ public:
 					}
 				}
 			}
-			for(int i=0;i<nodes.size();i++)
+			for(int i=0;i<nodes_count;i++)
 			{
-				if(!nodes[i].is_linear)continue;
+				if(!nodes[i].linear)continue;
 				lin_axis_rotated[i]=nodes[i].axis;
 				for(int k=1;k>=0;k--)
 					if(rotation_node_id[k]<i)
 					{
-						if(nodes[rotation_node_id[k]].is_part_node)
+						if(nodes[rotation_node_id[k]].part_node)
 							lin_axis_rotated[i]=InverseRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,k==0?c[v]:b[v]);
 						else
 							lin_axis_rotated[i]=ForwardRotateNode(lin_axis_rotated[i],nodes[rotation_node_id[k]].axis,k==0?c[v]:b[v]);
 					}
 			}
-
-			int linear_node_id[3];
-			for(int i=0;i<nodes.size();i++)
-				if(nodes[i].is_linear)
-					rotation_node_id[curr_rot_node++]=i;
-			Matrix3d m;
-			m.col(0)=lin_axis_rotated[linear_node_id[0]];
-			m.col(1)=lin_axis_rotated[linear_node_id[1]];
-			m.col(2)=lin_axis_rotated[linear_node_id[2]];
-			m.inverse();
-
-			Vector3d pos=m*(tool_pos-p);
-			result.variant[v][linear_node_id[0]]=pos[0];
-			result.variant[v][linear_node_id[0]]=pos[1];
-			result.variant[v][linear_node_id[0]]=pos[2];
-
-			result.variant[v][rotation_node_id[0]]=c[v];
-			result.variant[v][rotation_node_id[1]]=b[v];
+			TMatrix<T,3> m(lin_axis_rotated[X_id],lin_axis_rotated[Y_id],lin_axis_rotated[Z_id]);
+			m.Invert();
+			result.variant[v].pos=m*(tool_pos-p);
+			result.variant[v].A=C_id<A_id?b[v]:c[v];
+			result.variant[v].C=C_id>A_id?b[v]:c[v];
 		}
 	}
 
-	void FromMachineToolKinematics(TKinematics source,
-		Vector3d &tool_pos,Vector3d &tool_dir)
+	void FromMachineToolKinematics(TKinematics<T> source,
+		TVec<T,3> &tool_pos,TVec<T,3> &tool_dir)
 	{
-		Vector3d p(mach_tool_dir*tool_length);
+		T coords[5];
+		coords[A_id]=source.A;
+		coords[C_id]=source.C;
+		coords[X_id]=source.pos[0];
+		coords[Y_id]=source.pos[1];
+		coords[Z_id]=source.pos[2];
+
+		TVec<T,3> p(Tool_dir*tool_length);
 		//
-		for(int i=nodes.size()-1;i>=0;i--)
+		for(int i=nodes_count-1;i>=0;i--)
 		{
-			if(nodes[i].is_part_node)
+			if(nodes[i].part_node)
 			{
-				if(nodes[i].is_linear)
+				if(nodes[i].linear)
 				{
 					p-=nodes[i].offset;
-					p=InverseLinearNode(p,nodes[i].axis,source[i]);
+					p=InverseLinearNode(p,nodes[i].axis,coords[i]);
 				}
 				else
 				{
 					p-=nodes[i].offset;
-					p=InverseRotateNode(p,nodes[i].axis_offset,nodes[i].axis,source[i]);
+					p=InverseRotateNode(p,nodes[i].axis_offset,nodes[i].axis,coords[i]);
 				}
 			}else
 			{
-				if(nodes[i].is_linear)
+				if(nodes[i].linear)
 				{
 					p+=nodes[i].offset;
-					p=ForwardLinearNode(p,nodes[i].axis,source[i]);
+					p=ForwardLinearNode(p,nodes[i].axis,coords[i]);
 				}
 				else
 				{
 					p+=nodes[i].offset;
-					p=ForwardRotateNode(p,nodes[i].axis_offset,nodes[i].axis,source[i]);
+					p=ForwardRotateNode(p,nodes[i].axis_offset,nodes[i].axis,coords[i]);
 				}
 			}
 		}
 		//
-		Matrix3d m(part_system);
-		m.transpose();
-		tool_pos=m*p;
+		tool_pos=part_system.TransMul(p);
 		//
-		tool_dir=GetToolDirFromMachineToolKinematics(source);
+		tool_dir=GetToolDirFromMachineToolKinematics(source.A,source.C);
 		tool_dir=-tool_dir;
 	}
+
+	T AToMachineRange(T a)
+	{
+		return a;
+	}
+
+	T CToMachineRange(T c)
+	{
+		while(c<C_pole_min)c+=M_PI*2.0;
+		while(c>C_pole_max)c-=M_PI*2.0;
+		if(CIsInPole(c))throw exception("Coordinate 'C' is out of range");
+		return c;
+	}
+	//void InsertGCodeHead(std::string& result_code,TVec<T,3> use_offset, string use_machine_offset_string,bool use_machine_offset)
+	//{
+	//	//result_code=(boost::format("N1 G54 T1M6\r\nN2 G09\r\nN3 G01F1000\r\n")).str()+result_code;
+	//	//TODO переделать более универсально для разных станков
+	//	//result_code=(boost::format("N1 G54 T1M6 G01F1000\r\nN2 TRANS Z%.3f\r\n\r\n")%(-k0[2])).str()+result_code;
+	//	result_code=(boost::format(
+	//		"N1 G01F1000\r\n"
+	//		//"N2 M62\r\n"
+	//		//"N3 M61\r\n"
+	//		"N4 \r\n\r\n")).str()+result_code;
+	//	//result_code=(boost::format("%%\r\nN1 G56 G01F1000\r\nN2 G09\r\n\r\n")).str()+result_code+"N10000000 M2\r\nN10000001 M30";
+	//}
 };

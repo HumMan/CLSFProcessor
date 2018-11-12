@@ -2,6 +2,7 @@
 ## Eclipse
 #################
 
+submodules/
 *.pydevproject
 .project
 .metadata
