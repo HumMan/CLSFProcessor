@@ -1,4 +1,4 @@
-// NXProcessorTest.cpp : Defines the entry point for the console application.
+﻿// NXProcessorTest.cpp : Defines the entry point for the console application.
 //
 
 #include <stdio.h>

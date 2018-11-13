@@ -1,43 +1,6 @@
-#pragma once
+﻿#include "atptokenizer.h"
 
-
-#include <string.h>
-
-#include "vec.h"
-
-
-using namespace std;
-
-class TCLSFToken
-{
-//TODO private:
-public:
-	std::string name;
-	std::vector<std::string> params;
-public:
-	void AddParam(std::string value)
-	{
-		params.push_back(value);
-	}
-	void SetName(std::string value)
-	{
-		this->name = value;
-	}
-	std::string GetName()
-	{
-		return name;
-	}
-	size_t GetParamsCount()
-	{
-		return params.size();
-	}
-	std::string& operator[](size_t i)
-	{
-		return params[i];
-	}
-};
-
-
+using namespace CLSFProcessor;
 
 class TATPTokenizer
 {
@@ -140,3 +103,9 @@ public:
 		return tokens;
 	}
 };
+
+std::vector<TCLSFToken> CLSFProcessor::Parse(const char* use_source)
+{
+	TATPTokenizer tokenizer;
+	return tokenizer.Parse(use_source);
+}

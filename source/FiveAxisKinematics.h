@@ -1,10 +1,12 @@
-#pragma once
+п»ї#pragma once
 
 #include "vec.h"
 #include "matrix.h"
 using namespace BaluLib;
 
-#include "atptokenizer.h"
+#include "refactored/atptokenizer.h"
+
+using namespace CLSFProcessor;
 
 #include <map>
 #include <set>
@@ -12,29 +14,12 @@ using namespace BaluLib;
 #define M_PI 3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
 
-template<class T>
-struct TCommonProperties
+struct Utils
 {
-	struct TGCodeAxisProperties
-	{
-		bool remove_repeat;
-		bool force_rapid_change;
-		string lock_header;
-		string lock_footer;
-		string format;
-		bool is_increment;
-		double repeat_tol;
-		bool rad_to_deg;
-	};
-public:
-	T C_pole_min;
-	T C_pole_max;
 
-	T A_pole_min;
-	T A_pole_max;
 public:
 
-	T sqr(T value)
+	double sqr(double value)
 	{
 		return value * value;
 	}
@@ -47,120 +32,17 @@ public:
 			return c + M_PI;
 	}
 
-	T tool_length;
-	string tool_name;
-
-	T any_C_epsilon;
-	T ortho_vec_epsilon;
-	//T inverse_kinemtatics_tol;
-
-	
-	bool remove_F_repeat;
-	int any_C_criteria;
-
-	string G_code_header;
-	string G_code_footer;
-	int local_CS_G_index;
-
-	struct TOrientedFromGoto
-	{
-		string path_name;
-		double orientation;
-	};
-	std::vector<TOrientedFromGoto> oriented_from_goto;
-	//bool oriented_from_goto;//спец ф-я для джомакса - ориентированный поход и отход
-	//double oriented_from_goto_orientation;
-
-
-	bool use_subdivision;
-	bool subdivide_only_any_C;
-	bool use_circles;
-	bool use_tool_length_correction;
-
-	string head_name;
-
-	TGCodeAxisProperties gcode_axis_prop[5];
-
 	float DegToRad(float deg)
 	{
 		return deg / 180.0 * M_PI;
 	}
 
-	TCommonProperties(std::map<string,string> &ini_params)
-	{
-		//oriented_from_goto=false;
-		//oriented_from_goto_orientation=0;
-
-		local_CS_G_index=54;  //меняется коммандой NX_PROCESSOR_SET_CS_G(формируемой в NXProcessor в зависимости от названия СК - _G(%i) )
-
-		tool_length= atof(ini_params["tool_length"].c_str());
-
-		any_C_epsilon=atof(ini_params["any_C_epsilon"].c_str());
-		ortho_vec_epsilon=atof(ini_params["ortho_vec_epsilon"].c_str());
-
-		C_pole_min=DegToRad(atof(ini_params["C_pole_min"].c_str()));
-		C_pole_max=DegToRad(atof(ini_params["C_pole_max"].c_str()));
-
-		A_pole_min=DegToRad(atof(ini_params["A_pole_min"].c_str()));
-		A_pole_max=DegToRad(atof(ini_params["A_pole_max"].c_str()));
-		//inverse_kinemtatics_tol=0.001;//максимально допустимое различие между прямой и обратной функцией кинематики
-
-		for(int i=0;i<5;i++)
-		{
-			char buf[100];
-			sprintf(buf,"coord_%i.remove_repeat",i);
-			gcode_axis_prop[i].remove_repeat=atoi(ini_params[buf].c_str());
-
-			sprintf(buf,"coord_%i.force_rapid_change",i);
-			gcode_axis_prop[i].force_rapid_change=atoi(ini_params[buf].c_str());
-
-			//sprintf(buf,"coord_%i.lock_header",i);
-			//gcode_axis_prop[i].lock_header=(ini_params[buf]);
-			//boost::replace_all(gcode_axis_prop[i].lock_header,"\\n","\n");
-
-			//sprintf(buf,"coord_%i.lock_footer",i);
-			//gcode_axis_prop[i].lock_footer=(ini_params[buf]);
-			//boost::replace_all(gcode_axis_prop[i].lock_footer,"\\n","\n");
-
-			//sprintf(buf,"coord_%i.format",i);
-			//gcode_axis_prop[i].format=lexical_cast<string>(ini_params[buf]);
-
-			//sprintf(buf,"coord_%i.is_increment",i);
-			//gcode_axis_prop[i].is_increment=atoi(ini_params[buf]);
-
-			//sprintf(buf,"coord_%i.repeat_tol",i);
-			//gcode_axis_prop[i].repeat_tol=atof(ini_params[buf].c_str());
-
-			//sprintf(buf,"coord_%i.rad_to_deg",i);
-			//gcode_axis_prop[i].rad_to_deg=atof(ini_params[buf].c_str());
-		}
-
-		//remove_F_repeat=atoi(ini_params["remove_F_repeat"]);
-
-		//G_code_header=lexical_cast<string>(ini_params["G_code_header"]);
-		//boost::replace_all(G_code_header,"\\n","\n");
-		//G_code_footer=lexical_cast<string>(ini_params["G_code_footer"]);
-		//boost::replace_all(G_code_footer,"\\n","\n");
-
-		//any_C_criteria=atoi(ini_params["any_C_criteria"].c_str());
-
-		//use_subdivision=atoi(ini_params["use_subdivision"].c_str());
-
-		//subdivide_only_any_C=atoi(ini_params["subdivide_only_any_C"].c_str());
-
-		//use_circles=atoi(ini_params["use_circles"].c_str());
-
-		//use_tool_length_correction=atoi(ini_params["use_tool_length_correction"].c_str());
-
-		//head_name=ini_params["head_name"];
-	}
-
-	bool AIsInPole(T A)
+	bool AIsInPole(double A)
 	{
 		return !IsInMinMax(A,A_pole_min,A_pole_max);
 	}
 
-	bool IsInMinMax(T value, T min, T max)
+	bool IsInMinMax(double value, double min, double max)
 	{
 		return value > min && value < max;
 	}
@@ -177,15 +59,15 @@ public:
 		return angle;
 	}
 	bool AIsMoveOverPole(T start,T end)
-		//перемещение вокруг оси A идет через полюс
-		//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
+		//РїРµСЂРµРјРµС‰РµРЅРёРµ РІРѕРєСЂСѓРі РѕСЃРё A РёРґРµС‚ С‡РµСЂРµР· РїРѕР»СЋСЃ
+		//start,end - РїРµСЂРµРјРµС‰РµРЅРёРµ РІ РІРёРґРµ Р»РёРЅРµР№РЅС‹С… РєРѕРѕСЂРґРёРЅР°С‚ (СЃ СѓС‡РµС‚РѕРј СЃРєСЂСѓС‡РёРІР°РЅРёР№ Рё СЂР°СЃРєСЂСѓС‡РёРІР°РЅРёР№)
 	{
 		return start>A_pole_max||start<A_pole_min||
 			end>A_pole_max||end<A_pole_min;
 	}
 	bool CIsMoveOverPole(T start,T end)
-		//перемещение вокруг оси C идет через полюс
-		//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
+		//РїРµСЂРµРјРµС‰РµРЅРёРµ РІРѕРєСЂСѓРі РѕСЃРё C РёРґРµС‚ С‡РµСЂРµР· РїРѕР»СЋСЃ
+		//start,end - РїРµСЂРµРјРµС‰РµРЅРёРµ РІ РІРёРґРµ Р»РёРЅРµР№РЅС‹С… РєРѕРѕСЂРґРёРЅР°С‚ (СЃ СѓС‡РµС‚РѕРј СЃРєСЂСѓС‡РёРІР°РЅРёР№ Рё СЂР°СЃРєСЂСѓС‡РёРІР°РЅРёР№)
 	{
 		bool isvalid= start>C_pole_max||start<C_pole_min||
 			end>C_pole_max||end<C_pole_min;
@@ -227,7 +109,7 @@ public:
 
 	struct TKinematicsNode:public TKinematicsPair<T>
 	{
-		bool move_over_pole[2];		//индекс в массив - текущий проверяемый вариант, но не текущая линия (т.к. маршруты перекрываются)
+		bool move_over_pole[2];		//РёРЅРґРµРєСЃ РІ РјР°СЃСЃРёРІ - С‚РµРєСѓС‰РёР№ РїСЂРѕРІРµСЂСЏРµРјС‹Р№ РІР°СЂРёР°РЅС‚, РЅРѕ РЅРµ С‚РµРєСѓС‰Р°СЏ Р»РёРЅРёСЏ (С‚.Рє. РјР°СЂС€СЂСѓС‚С‹ РїРµСЂРµРєСЂС‹РІР°СЋС‚СЃСЏ)
 		bool change_line[2];
 
 		T A_pole_change_delta[2];	//
@@ -255,8 +137,8 @@ public:
 	}
 	
 	bool IsCCWMove(T a0,T a1,T& dist)
-		//result - направление наикратчайшего перемещения из a0 в a1
-		//dist - величина и знак перемещения (+ это CCW)
+		//result - РЅР°РїСЂР°РІР»РµРЅРёРµ РЅР°РёРєСЂР°С‚С‡Р°Р№С€РµРіРѕ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёР· a0 РІ a1
+		//dist - РІРµР»РёС‡РёРЅР° Рё Р·РЅР°Рє РїРµСЂРµРјРµС‰РµРЅРёСЏ (+ СЌС‚Рѕ CCW)
 	{
 		a0=To0_360Space(a0);
 		a1=To0_360Space(a1);
@@ -269,7 +151,7 @@ public:
 	}
 
 	T MovementCost(TKinematics<T> v0,TKinematics<T> v1)
-		//result - стоимость перемещения по наикратчайшему пути из v0 в v1
+		//result - СЃС‚РѕРёРјРѕСЃС‚СЊ РїРµСЂРµРјРµС‰РµРЅРёСЏ РїРѕ РЅР°РёРєСЂР°С‚С‡Р°Р№С€РµРјСѓ РїСѓС‚Рё РёР· v0 РІ v1
 	{
 		T da,dc;
 		IsCCWMove(v0.A,v1.A,da);
@@ -291,7 +173,7 @@ public:
 	}
 
 	bool NeedLinearizeMovementSwap(std::vector<TPipelineElement> &pipe,int i)
-		//result - кратчайшие перемещения находятся в вариантах с одинаковыми индексами
+		//result - РєСЂР°С‚С‡Р°Р№С€РёРµ РїРµСЂРµРјРµС‰РµРЅРёСЏ РЅР°С…РѕРґСЏС‚СЃСЏ РІ РІР°СЂРёР°РЅС‚Р°С… СЃ РѕРґРёРЅР°РєРѕРІС‹РјРё РёРЅРґРµРєСЃР°РјРё
 	{
 		TKinematicsNode &t0=pipe[i].machine_orient;
 		TKinematicsNode &t1=pipe[i+1].machine_orient;
@@ -314,7 +196,7 @@ public:
 		FromMachineToolKinematics(p1,kp1,tool_dir1);
 
 		TKinematics<T> middle;
-		middle.A=(p0.A+p1.A)*0.5; //TODO можно перейти к кинематике как к 5мерному вектору -> получаем простейшую интерполяцию и расстояние
+		middle.A=(p0.A+p1.A)*0.5; //TODO РјРѕР¶РЅРѕ РїРµСЂРµР№С‚Рё Рє РєРёРЅРµРјР°С‚РёРєРµ РєР°Рє Рє 5РјРµСЂРЅРѕРјСѓ РІРµРєС‚РѕСЂСѓ -> РїРѕР»СѓС‡Р°РµРј РїСЂРѕСЃС‚РµР№С€СѓСЋ РёРЅС‚РµСЂРїРѕР»СЏС†РёСЋ Рё СЂР°СЃСЃС‚РѕСЏРЅРёРµ
 		middle.C=(p0.C+p1.C)*0.5;
 		middle.pos=(p0.pos+p1.pos)*0.5;
 		FromMachineToolKinematics(middle,middle_tool.pos,middle_tool.dir);
@@ -330,7 +212,7 @@ public:
 	}
 
 	void GetMovement(TKinematics<T> p0,TKinematics<T> p1,T& delta_A,T& delta_C)
-		//delta_A,delta_C - приращения необходимые для перемещения из кинематики 0 в кинематику 1
+		//delta_A,delta_C - РїСЂРёСЂР°С‰РµРЅРёСЏ РЅРµРѕР±С…РѕРґРёРјС‹Рµ РґР»СЏ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёР· РєРёРЅРµРјР°С‚РёРєРё 0 РІ РєРёРЅРµРјР°С‚РёРєСѓ 1
 	{
 		IsCCWMove(p0.A,p1.A,delta_A);
 		IsCCWMove(p0.C,p1.C,delta_C);
@@ -382,7 +264,7 @@ public:
 			l0=To0_360Space(AngleFromDir(v0));
 			l1=To0_360Space(AngleFromDir(v1));
 			bool ccw=IsCCWMove(l0,l1,dist);
-		}else //с явным указанием направления поворота
+		}else //СЃ СЏРІРЅС‹Рј СѓРєР°Р·Р°РЅРёРµРј РЅР°РїСЂР°РІР»РµРЅРёСЏ РїРѕРІРѕСЂРѕС‚Р°
 		{
 			l0=To0_360Space(AngleFromDir(v0));
 			l1=To0_360Space(AngleFromDir(v1));
@@ -410,7 +292,7 @@ public:
 		return v0 * (1 - factor) + v1 * factor;
 	}
 
-	void CalcCircleParameters(std::vector<TPipelineElement> &pipe)//TODO пока что здесь все дуги разбиваются на мелкие линейные отрезки
+	void CalcCircleParameters(std::vector<TPipelineElement> &pipe)//TODO РїРѕРєР° С‡С‚Рѕ Р·РґРµСЃСЊ РІСЃРµ РґСѓРіРё СЂР°Р·Р±РёРІР°СЋС‚СЃСЏ РЅР° РјРµР»РєРёРµ Р»РёРЅРµР№РЅС‹Рµ РѕС‚СЂРµР·РєРё
 	{
 
 		std::vector<TVec<T,2>> points;
@@ -490,9 +372,9 @@ public:
 						int points_count=points.size();
 						if(points.size()>2)
 						{
-							//TODO очень медленно при большом количествве
+							//TODO РѕС‡РµРЅСЊ РјРµРґР»РµРЅРЅРѕ РїСЂРё Р±РѕР»СЊС€РѕРј РєРѕР»РёС‡РµСЃС‚РІРІРµ
 							
-							//TODO я убрал pipe.InsertCount(points_count-2,i);
+							//TODO СЏ СѓР±СЂР°Р» pipe.InsertCount(points_count-2,i);
 							
 							int last_point=i+points_count-2;
 							pipe[last_point].tool_orient=pipe[i].tool_orient;
@@ -585,7 +467,7 @@ public:
 	void DetermineAnyCKinematics(std::vector<TPipelineElement> &pipe)
 	{
 
-		//здесь мы можем использовать различные критерии работы координат при any_C
+		//Р·РґРµСЃСЊ РјС‹ РјРѕР¶РµРј РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЂР°Р·Р»РёС‡РЅС‹Рµ РєСЂРёС‚РµСЂРёРё СЂР°Р±РѕС‚С‹ РєРѕРѕСЂРґРёРЅР°С‚ РїСЂРё any_C
 		switch(any_C_criteria)
 		{
 		case 0:
@@ -602,7 +484,7 @@ public:
 				//			ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].tool_orient.dir,pipe[i].machine_orient,true,pipe[i-1].machine_orient.variant[0].C);
 				//		}
 			}break;
-		case 1://критерий максимальной координаты по X (для ТФЦ-600)
+		case 1://РєСЂРёС‚РµСЂРёР№ РјР°РєСЃРёРјР°Р»СЊРЅРѕР№ РєРѕРѕСЂРґРёРЅР°С‚С‹ РїРѕ X (РґР»СЏ РўР¤Р¦-600)
 			{
 				//T step=DegToRad(2.0);
 				//if(pipe[0].machine_orient.any_C)
@@ -657,7 +539,7 @@ public:
 				//			//ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].tool_orient.dir,pipe[i].machine_orient,true,pipe[i-1].machine_orient.variant[0].C);
 				//		}
 			}break;
-		case 2://критерий максимальной координаты по X (для ТФЦ-600)
+		case 2://РєСЂРёС‚РµСЂРёР№ РјР°РєСЃРёРјР°Р»СЊРЅРѕР№ РєРѕРѕСЂРґРёРЅР°С‚С‹ РїРѕ X (РґР»СЏ РўР¤Р¦-600)
 			{
 				
 				//for(int i=1;i<pipe.size();i++)
@@ -666,7 +548,7 @@ public:
 				//		if(pipe[i].machine_orient.any_C)
 				//		{
 				//			TKinematicsPair<T> pair;
-				//			ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].tool_orient.pos.GetNormalized(),pair);//TODO а если позиция будет равна нулю?
+				//			ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].tool_orient.pos.GetNormalized(),pair);//TODO Р° РµСЃР»Рё РїРѕР·РёС†РёСЏ Р±СѓРґРµС‚ СЂР°РІРЅР° РЅСѓР»СЋ?
 				//			T result_C=pair.variant[0].C;
 				//			TVec<T,3> pos=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,result_C);
 				//			pipe[i].machine_orient.variant[0].pos=pos;
@@ -732,7 +614,7 @@ public:
 						}else
 						{
 							curr->change_line[curr_line]=false;
-							//TODO обработка случая когда сменить полюс нельза а надо раскручиваться по C
+							//TODO РѕР±СЂР°Р±РѕС‚РєР° СЃР»СѓС‡Р°СЏ РєРѕРіРґР° СЃРјРµРЅРёС‚СЊ РїРѕР»СЋСЃ РЅРµР»СЊР·Р° Р° РЅР°РґРѕ СЂР°СЃРєСЂСѓС‡РёРІР°С‚СЊСЃСЏ РїРѕ C
 							T new_A=AToMachineRange(curr->variant[curr_line].A);
 							T new_C=CToMachineRange(curr->variant[curr_line].C);
 
@@ -891,7 +773,7 @@ public:
 	{
 		result_code="";
 		if(pipe.size()==0)return;
-		char* buff=new char[10000000];//TODO сюда записывается текст из auxfun котоорый может быть очень болььшим
+		char* buff=new char[10000000];//TODO СЃСЋРґР° Р·Р°РїРёСЃС‹РІР°РµС‚СЃСЏ С‚РµРєСЃС‚ РёР· auxfun РєРѕС‚РѕРѕСЂС‹Р№ РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕС‡РµРЅСЊ Р±РѕР»СЊСЊС€РёРј
 		T curr_feed=0/*pipe[0].feed*/;
 		int curr_cutcom=0;
 		string curr_path_name;
@@ -902,8 +784,8 @@ public:
 
 		bool oriented_from_goto_engage_done=false;
 		
-		T curr_coord[5];//текущие координаты
-		T curr_coord_machine[5];//текущие координаты с учетом округления(используется при инкрементном режиме для устранения накапливающейся ошбки округления)
+		T curr_coord[5];//С‚РµРєСѓС‰РёРµ РєРѕРѕСЂРґРёРЅР°С‚С‹
+		T curr_coord_machine[5];//С‚РµРєСѓС‰РёРµ РєРѕРѕСЂРґРёРЅР°С‚С‹ СЃ СѓС‡РµС‚РѕРј РѕРєСЂСѓРіР»РµРЅРёСЏ(РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂРё РёРЅРєСЂРµРјРµРЅС‚РЅРѕРј СЂРµР¶РёРјРµ РґР»СЏ СѓСЃС‚СЂР°РЅРµРЅРёСЏ РЅР°РєР°РїР»РёРІР°СЋС‰РµР№СЃСЏ РѕС€Р±РєРё РѕРєСЂСѓРіР»РµРЅРёСЏ)
 		bool need_print[5]={0,0,0,0,0};
 
 		T* new_coord=&pipe[0].pos[0];
@@ -969,7 +851,7 @@ public:
 
 				//if(oriented_from_goto&&!oriented_from_goto_engage_done)
 				//{
-				//	if((i==0&&pipe[i].color==186)||(pipe[i-1].color!=186&&pipe[i].color==186))//спец комманда для подхода и отхода
+				//	if((i==0&&pipe[i].color==186)||(pipe[i-1].color!=186&&pipe[i].color==186))//СЃРїРµС† РєРѕРјРјР°РЅРґР° РґР»СЏ РїРѕРґС…РѕРґР° Рё РѕС‚С…РѕРґР°
 				//	{
 				//		sprintf(buff,"\nSPOS=%f\n",oriented_from_goto_orientation);
 				//		result_code+=buff;
@@ -984,7 +866,7 @@ public:
 					}
 
 					if((1/*coord_repeat_tol*/<abs(pipe[i].spndl_rpm-curr_spndl_rpm)||curr_clw!=pipe[i].clw||i==0)
-						&&temp_id==-1)//если is_oriented_from_goto_engage то задается в подходе отходе
+						&&temp_id==-1)//РµСЃР»Рё is_oriented_from_goto_engage С‚Рѕ Р·Р°РґР°РµС‚СЃСЏ РІ РїРѕРґС…РѕРґРµ РѕС‚С…РѕРґРµ
 					{
 						if(abs(curr_spndl_rpm-0)<0.001||i==0)
 							sprintf(buff,"M3S%i\n",/*pipe[i].clw?3:4,*/int(pipe[i].spndl_rpm));
@@ -1005,7 +887,7 @@ public:
 							tol<=abs(new_coord[c]-curr_coord[c])||!gcode_axis_prop[c].remove_repeat;
 						if(need_print[c]&&gcode_axis_prop[c].force_rapid_change)
 							force_rapid_change=true;
-						//если имеется функция разблокировки/блокировки оси то включаем ее
+						//РµСЃР»Рё РёРјРµРµС‚СЃСЏ С„СѓРЅРєС†РёСЏ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІРєРё/Р±Р»РѕРєРёСЂРѕРІРєРё РѕСЃРё С‚Рѕ РІРєР»СЋС‡Р°РµРј РµРµ
 						if(!last_need_print&&need_print[c]&&gcode_axis_prop[c].lock_header!="")
 						{
 							result_code+=gcode_axis_prop[c].lock_header;
@@ -1018,7 +900,7 @@ public:
 
 					sprintf(buff,"%s",pipe[i].auxfun.c_str());
 					result_code+=buff;
-					//если направление инструмента 0,0,-1 то надо сменить коррекцию на противоположную
+					//РµСЃР»Рё РЅР°РїСЂР°РІР»РµРЅРёРµ РёРЅСЃС‚СЂСѓРјРµРЅС‚Р° 0,0,-1 С‚Рѕ РЅР°РґРѕ СЃРјРµРЅРёС‚СЊ РєРѕСЂСЂРµРєС†РёСЋ РЅР° РїСЂРѕС‚РёРІРѕРїРѕР»РѕР¶РЅСѓСЋ
 					if(pipe[i].tool_orient.dir.Distance(TVec<T,3>(0,0,-1))<0.0001)
 					{
 						if(pipe[i].cutcom==1)pipe[i].cutcom=2;
@@ -1030,7 +912,7 @@ public:
 						result_code+=buff;
 						curr_cutcom=pipe[i].cutcom;
 					}
-					//плоскость круговой/спиральной интерполяции
+					//РїР»РѕСЃРєРѕСЃС‚СЊ РєСЂСѓРіРѕРІРѕР№/СЃРїРёСЂР°Р»СЊРЅРѕР№ РёРЅС‚РµСЂРїРѕР»СЏС†РёРё
 					if(pipe[i].mask==PrimitiveMask::CIRCLE)
 					{
 						int rot_axis;
@@ -1054,12 +936,12 @@ public:
 						result_code+=buff;
 					}
 
-					//TODO ВАЖНООООО!!!! в настройках ини файла неправильно трактуются X_id=0
+					//TODO Р’РђР–РќРћРћРћРћРћ!!!! РІ РЅР°СЃС‚СЂРѕР№РєР°С… РёРЅРё С„Р°Р№Р»Р° РЅРµРїСЂР°РІРёР»СЊРЅРѕ С‚СЂР°РєС‚СѓСЋС‚СЃСЏ X_id=0
 					//Y_id=1
 					//Z_id=2
 					//A_id=4
 					//C_id=3
-					// почему-то перепутываются оси при измененном порядке
+					// РїРѕС‡РµРјСѓ-С‚Рѕ РїРµСЂРµРїСѓС‚С‹РІР°СЋС‚СЃСЏ РѕСЃРё РїСЂРё РёР·РјРµРЅРµРЅРЅРѕРј РїРѕСЂСЏРґРєРµ
 
 					for(int c=0;c<5;c++)
 					{
@@ -1073,7 +955,7 @@ public:
 							if(gcode_axis_prop[c].is_increment)
 							{
 								T inc_val=new_coord_val-curr_coord_machine[c];
-								sprintf(buff,gcode_axis_prop[c].format.c_str(),inc_val);//TODO из-за округления будет накапливаться ошибка DONE
+								sprintf(buff,gcode_axis_prop[c].format.c_str(),inc_val);//TODO РёР·-Р·Р° РѕРєСЂСѓРіР»РµРЅРёСЏ Р±СѓРґРµС‚ РЅР°РєР°РїР»РёРІР°С‚СЊСЃСЏ РѕС€РёР±РєР° DONE
 								inc_val=floor(inc_val/gcode_axis_prop[c].repeat_tol+0.5)*gcode_axis_prop[c].repeat_tol;
 
 								curr_coord_machine[c]+=inc_val;
@@ -1094,7 +976,7 @@ public:
 						bool positive;
 						IsOrthogonalVector(pipe[i].normal,rot_axis,positive);
 
-						//печатаем координаты центра кроме координаты оси вращения
+						//РїРµС‡Р°С‚Р°РµРј РєРѕРѕСЂРґРёРЅР°С‚С‹ С†РµРЅС‚СЂР° РєСЂРѕРјРµ РєРѕРѕСЂРґРёРЅР°С‚С‹ РѕСЃРё РІСЂР°С‰РµРЅРёСЏ
 						for(int a=0;a<3;a++)
 						{
 							if(circle_interpolation_center_absol)
@@ -1155,7 +1037,7 @@ public:
 
 					//if(oriented_from_goto&&oriented_from_goto_engage_done)
 					//{
-					//	if((i==0&&pipe[i].color==186)||(pipe[i-1].color!=186&&pipe[i].color==186))//спец комманда для подхода и отхода
+					//	if((i==0&&pipe[i].color==186)||(pipe[i-1].color!=186&&pipe[i].color==186))//СЃРїРµС† РєРѕРјРјР°РЅРґР° РґР»СЏ РїРѕРґС…РѕРґР° Рё РѕС‚С…РѕРґР°
 					//	{
 					//		sprintf(buff,"\nM5\nSPOS=%f\n",oriented_from_goto_orientation);
 					//		result_code+=buff;
@@ -1200,7 +1082,7 @@ public:
 	}
 
 	
-	T MovementDistance(TKinematics<T> k0,TKinematics<T> k1)//в отличие от предыдущей версии считает перемещение по всем координатам в линейном виде
+	T MovementDistance(TKinematics<T> k0,TKinematics<T> k1)//РІ РѕС‚Р»РёС‡РёРµ РѕС‚ РїСЂРµРґС‹РґСѓС‰РµР№ РІРµСЂСЃРёРё СЃС‡РёС‚Р°РµС‚ РїРµСЂРµРјРµС‰РµРЅРёРµ РїРѕ РІСЃРµРј РєРѕРѕСЂРґРёРЅР°С‚Р°Рј РІ Р»РёРЅРµР№РЅРѕРј РІРёРґРµ
 	{
 		return sqrt(k0.pos.SqrDistance(k1.pos)+sqr(k0.A-k1.A)+sqr(k0.C-k1.C));
 	}
@@ -1263,7 +1145,7 @@ public:
 	}
 
 	bool MergeFrames(std::vector<TToolMovementElement<T>> &pipe,int window_start,int window_end)
-		//return - произошло удаление элемента
+		//return - РїСЂРѕРёР·РѕС€Р»Рѕ СѓРґР°Р»РµРЅРёРµ СЌР»РµРјРµРЅС‚Р°
 	{
 		int min_k=-1;
 		T min_time=0;
@@ -1303,7 +1185,7 @@ public:
 				if(time<1.0&&MergeFrames(pipe,i,window_end))
 				{
 					if(window_end>pipe.size()-1)return;
-					time+=pipe[window_end].move_time;//если было удаление кадр то на этом месте теперь новый кадр
+					time+=pipe[window_end].move_time;//РµСЃР»Рё Р±С‹Р»Рѕ СѓРґР°Р»РµРЅРёРµ РєР°РґСЂ С‚Рѕ РЅР° СЌС‚РѕРј РјРµСЃС‚Рµ С‚РµРїРµСЂСЊ РЅРѕРІС‹Р№ РєР°РґСЂ
 				}else
 				{
 					time-=pipe[i].move_time;
@@ -1356,7 +1238,7 @@ public:
 						int new_el_high=(pipe[i].rapid?(tol/rapid_tolerance):(tol/tolerance))+1;
 						if(new_el_high>1)
 							count_after_pair.push_back(TVec<int,2>((new_el_high+1)-2,i));
-						//(new_el_high+1)-2 уменьшается на 2 т.к. начальная и конечная точка уже имеется и надо добавить только промежуточные
+						//(new_el_high+1)-2 СѓРјРµРЅСЊС€Р°РµС‚СЃСЏ РЅР° 2 С‚.Рє. РЅР°С‡Р°Р»СЊРЅР°СЏ Рё РєРѕРЅРµС‡РЅР°СЏ С‚РѕС‡РєР° СѓР¶Рµ РёРјРµРµС‚СЃСЏ Рё РЅР°РґРѕ РґРѕР±Р°РІРёС‚СЊ С‚РѕР»СЊРєРѕ РїСЂРѕРјРµР¶СѓС‚РѕС‡РЅС‹Рµ
 					}
 				}
 			}
@@ -1462,15 +1344,15 @@ public:
 		{
 			try{
 				if(
-					atp_tokens[i].name=="GOTO"||
-					atp_tokens[i].name=="FROM"||
-					atp_tokens[i].name=="GOHOME")
+					atp_tokens[i].Name()=="GOTO"||
+					atp_tokens[i].Name() =="FROM"||
+					atp_tokens[i].Name() =="GOHOME")
 				{
 					TVec<T,3> pos,dir;
-					if(atp_tokens[i].params.size()!=3&&atp_tokens[i].params.size() !=6)
+					if(atp_tokens[i].ParamsCount()!=3&&atp_tokens[i].ParamsCount() !=6)
 						throw string("Not enough parameters in GOTO");
 					for(int k=0;k<3;k++)pos[k]=atof(atp_tokens[i][k].c_str());
-					if(atp_tokens[i].params.size()<=3)
+					if(atp_tokens[i].ParamsCount()<=3)
 						dir=curr_dir;
 					else
 					{
@@ -1485,8 +1367,8 @@ public:
 					t.feed=curr_feed;
 					t.spndl_rpm=curr_spndl_rpm;
 					t.clw=clw;
-					if(atp_tokens[i].name=="GOHOME")rapid=true;
-					if(atp_tokens[i].name=="FROM")rapid=true;
+					if(atp_tokens[i].Name() =="GOHOME")rapid=true;
+					if(atp_tokens[i].Name() =="FROM")rapid=true;
 					t.rapid=rapid;
 					t.base_element=true;
 					t.color=curr_color;
@@ -1496,17 +1378,17 @@ public:
 					if(rapid)rapid=false;
 					curr_aux="";
 				}
-				else if(atp_tokens[i].name=="CIRCLE")
+				else if(atp_tokens[i].Name() =="CIRCLE")
 				{
 					TVec<T,3> center,normal;
 					T radius;
 					TPipelineElement t;
 					t.spiral_times=-1;
-					if(atp_tokens[i].params.size()<11)
+					if(atp_tokens[i].ParamsCount()<11)
 						throw string("Not enough parameters in CIRCLE");
 					for(int k=0;k<3;k++)center[k]=atof(atp_tokens[i][k].c_str());
 					for(int k=0;k<3;k++)normal[k]= atof(atp_tokens[i][k+3].c_str());
-					if(atp_tokens[i].params.size()==13&&atp_tokens[i][11]=="TIMES")
+					if(atp_tokens[i].ParamsCount()==13&&atp_tokens[i][11]=="TIMES")
 					{
 						t.spiral_times= atof(atp_tokens[i][12].c_str());
 					}
@@ -1528,31 +1410,31 @@ public:
 					t.path_name=curr_path_name;
 					pipe.push_back(t);
 					curr_aux="";
-				}else if(atp_tokens[i].name=="FEDRAT")
+				}else if(atp_tokens[i].Name()=="FEDRAT")
 				{
-					if(atp_tokens[i].params.size()==1)
+					if(atp_tokens[i].ParamsCount()==1)
 						curr_feed= atof(atp_tokens[i][0].c_str());
 					else
 						curr_feed= atof(atp_tokens[i][1].c_str());
 					rapid=false;
-				}else if(atp_tokens[i].name=="SPINDL")
+				}else if(atp_tokens[i].Name()=="SPINDL")
 				{
-					if(atp_tokens[i].params.size()==3)//TODO при смене инструмента у нас сбрасываются обороты шпинделя
+					if(atp_tokens[i].ParamsCount()==3)//TODO РїСЂРё СЃРјРµРЅРµ РёРЅСЃС‚СЂСѓРјРµРЅС‚Р° Сѓ РЅР°СЃ СЃР±СЂР°СЃС‹РІР°СЋС‚СЃСЏ РѕР±РѕСЂРѕС‚С‹ С€РїРёРЅРґРµР»СЏ
 					{
 						curr_spndl_rpm= atof(atp_tokens[i][1].c_str());
-						clw=(atp_tokens[i][2]=="CLW ");//TODO убирать пробельные символы
+						clw=(atp_tokens[i][2]=="CLW ");//TODO СѓР±РёСЂР°С‚СЊ РїСЂРѕР±РµР»СЊРЅС‹Рµ СЃРёРјРІРѕР»С‹
 					}
 				}
-				else if(atp_tokens[i].name=="PAINT")
+				else if(atp_tokens[i].Name()=="PAINT")
 				{
-					if(atp_tokens[i].params.size()==2&&(atp_tokens[i][0]=="COLOR"))
+					if(atp_tokens[i].ParamsCount()==2&&(atp_tokens[i][0]=="COLOR"))
 						curr_color= atof(atp_tokens[i][1].c_str());
 				}
-				else if(atp_tokens[i].name=="RAPID")
+				else if(atp_tokens[i].Name()=="RAPID")
 				{
 					rapid=true;
 				}
-				else if(atp_tokens[i].name=="TLDATA")
+				else if(atp_tokens[i].Name()=="TLDATA")
 				{
 					if(atp_tokens[i][0]=="MILL")
 						tool_length= atof(atp_tokens[i][3].c_str());
@@ -1563,18 +1445,18 @@ public:
 					else throw string("unknown tool type");
 					if(!use_tool_length_correction)tool_length=0;
 				}
-				else if(atp_tokens[i].name=="AUXFUN")
+				else if(atp_tokens[i].Name()=="AUXFUN")
 				{
-					if(atp_tokens[i][0]=="0")//ф-я вывода текста
+					if(atp_tokens[i][0]=="0")//С„-СЏ РІС‹РІРѕРґР° С‚РµРєСЃС‚Р°
 					{
 						curr_aux+="\n";
-						for(int k=1;k<atp_tokens[i].params.size();k++)
+						for(int k=1;k<atp_tokens[i].ParamsCount();k++)
 						{
 							curr_aux+=atp_tokens[i][k];
-							if(k!=atp_tokens[i].params.size()-1)
+							if(k!=atp_tokens[i].ParamsCount()-1)
 								curr_aux+=',';
 						}
-					}if(atp_tokens[i][0]=="1")//включение спец ф-и oriented_from_goto
+					}if(atp_tokens[i][0]=="1")//РІРєР»СЋС‡РµРЅРёРµ СЃРїРµС† С„-Рё oriented_from_goto
 					{
 						//oriented_from_goto=true;
 						//oriented_from_goto_orientation=lexical_cast<double>(atp_tokens[i][1].c_str());
@@ -1585,7 +1467,7 @@ public:
 					}
 					
 				}
-				else if(atp_tokens[i].name=="CUTCOM")
+				else if(atp_tokens[i].Name()=="CUTCOM")
 				{
 					if(atp_tokens[i][0]=="LEFT")
 					{
@@ -1598,15 +1480,15 @@ public:
 						curr_cutcom=0;
 					}
 				}
-				else if(atp_tokens[i].name=="NX_PROCESSOR_SET_CS_G")
+				else if(atp_tokens[i].Name()=="NX_PROCESSOR_SET_CS_G")
 				{
 					local_CS_G_index=atoi(atp_tokens[i][0].c_str());
 				}
-				else if(atp_tokens[i].name=="NX_PROCESSOR_PATH_CS_NAME")
+				else if(atp_tokens[i].Name()=="NX_PROCESSOR_PATH_CS_NAME")
 				{
 					curr_path_cs_name=atp_tokens[i][0].c_str();
 				}
-				else if(atp_tokens[i].name=="MSYS")
+				else if(atp_tokens[i].Name()=="MSYS")
 				{
 					int local_g_id=54;
 					if(curr_path_cs_name=="")
@@ -1634,12 +1516,12 @@ public:
 						sprintf(buf,"\nG%i\n",local_g_id);
 					curr_aux+=buf;
 				}
-				else if(atp_tokens[i].name=="TOOL PATH")
+				else if(atp_tokens[i].Name()=="TOOL PATH")
 				{
 					curr_path_name=atp_tokens[i][0].c_str();
 					tool_name=atp_tokens[i][2].c_str();
 				}
-				else if(atp_tokens[i].name=="END-OF-PATH")
+				else if(atp_tokens[i].Name()=="END-OF-PATH")
 				{
 					curr_path_name="";
 				}
@@ -1691,11 +1573,11 @@ public:
 		//TraceLine(pipe,1);
 		SelectBestLine(pipe,result_pipe);
 		if(use_subdivision)
-			Subdivide(result_pipe);//TODO для ТФЦ600 при разбивке поворота по C нужное перемещение по дуге не совпадает с прямой между позициями поэтому скачет X
+			Subdivide(result_pipe);//TODO РґР»СЏ РўР¤Р¦600 РїСЂРё СЂР°Р·Р±РёРІРєРµ РїРѕРІРѕСЂРѕС‚Р° РїРѕ C РЅСѓР¶РЅРѕРµ РїРµСЂРµРјРµС‰РµРЅРёРµ РїРѕ РґСѓРіРµ РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃ РїСЂСЏРјРѕР№ РјРµР¶РґСѓ РїРѕР·РёС†РёСЏРјРё РїРѕСЌС‚РѕРјСѓ СЃРєР°С‡РµС‚ X
 
 		CalculateMoveTime(result_pipe,fast_movement_time,work_movement_time);
 		CalculateContourSpeed(result_pipe);
-		//Compress(result_pipe); //пока что очень медленно
+		//Compress(result_pipe); //РїРѕРєР° С‡С‚Рѕ РѕС‡РµРЅСЊ РјРµРґР»РµРЅРЅРѕ
 
 		//GetGCode(result_pipe,result_code);
 		//InsertGCodeHead(result_code);
@@ -1703,7 +1585,7 @@ public:
 		//done_time = microsec_clock::local_time();
 		//cout << " ("<< to_iso_string(done_time - now) <<")\n";
 	}
-	void GetCode(std::vector<TToolMovementElement<T>> &pipe,string &result_code,const char* ext_header,const char* prog_id)//только для standalone постов, далее убрать
+	void GetCode(std::vector<TToolMovementElement<T>> &pipe,string &result_code,const char* ext_header,const char* prog_id)//С‚РѕР»СЊРєРѕ РґР»СЏ standalone РїРѕСЃС‚РѕРІ, РґР°Р»РµРµ СѓР±СЂР°С‚СЊ
 	{
 		//boost::format header_format(G_code_header.c_str());
 		//header_format.exceptions( boost::io::all_error_bits ^ ( boost::io::too_many_args_bit | boost::io::too_few_args_bit )  );
@@ -1731,7 +1613,7 @@ public:
 		//InsertGCodeHead(result_code,TVec<T,3>(),"",false);
 	}
 	//void GetCode(std::vector<TToolMovementElement<T>> &pipe,string &result_code,
-	//	TVec<T,3> use_offset, string use_machine_offset_string,bool use_machine_offset)//только для standalone постов, далее убрать
+	//	TVec<T,3> use_offset, string use_machine_offset_string,bool use_machine_offset)//С‚РѕР»СЊРєРѕ РґР»СЏ standalone РїРѕСЃС‚РѕРІ, РґР°Р»РµРµ СѓР±СЂР°С‚СЊ
 	//{
 	//	GetGCode(pipe,result_code);
 	//	result_code=(boost::format(G_code_header.c_str())%local_CS_G_index).str()+result_code+G_code_footer;

@@ -1,4 +1,4 @@
-
+﻿
 #include <ICLSFProcessor.h>
 
 #include <stdlib.h>
@@ -51,8 +51,8 @@ int ICLSFProcessor::CLSFToGCode(
 	sprintf(config_fname,"%s.ini",use_machine_config);
 	ParseIniFile(config_fname,ini_params);
 	TATPProcessor<double,TUniversal5axis<double>> atp_processor(ini_params);
-	TATPTokenizer atp_tokenenizer;
-	auto atp_tokens = atp_tokenenizer.Parse(use_clsf);
+	
+	auto atp_tokens = Parse(use_clsf);
 	std::vector<TToolMovementElement<double>> result_pipe;
 	atp_processor.PassThrough(atp_tokens,result_pipe,fast_movement_time,work_movement_time);
 	atp_processor.GetCode(result_pipe,p->gcode,ext_header,prog_id);
