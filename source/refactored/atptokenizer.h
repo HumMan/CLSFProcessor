@@ -36,4 +36,5 @@ namespace CLSFProcessor
 	};
 
 	std::vector<TCLSFToken> Parse(const char* use_source);
+	std::vector<TCLSFToken> ParsePath(const char* use_file_path);
 }

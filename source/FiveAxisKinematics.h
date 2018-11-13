@@ -4,9 +4,7 @@
 #include "matrix.h"
 using namespace BaluLib;
 
-#include "refactored/atptokenizer.h"
 
-using namespace CLSFProcessor;
 
 #include <map>
 #include <set>
@@ -14,11 +12,23 @@ using namespace CLSFProcessor;
 #define M_PI 3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
 
-struct Utils
+#include "refactored\commonConf.h"
+
+
+#include "Uni5axis.h"
+
+namespace CLSFProcessor
 {
 
-public:
 
+	struct Utils
+{
+	CLSFProcessor::Conf::TCommon conf;
+public:
+	Utils(CLSFProcessor::Conf::TCommon conf)
+	{
+		this->conf = conf;
+	}
 	double sqr(double value)
 	{
 		return value * value;
@@ -39,7 +49,7 @@ public:
 
 	bool AIsInPole(double A)
 	{
-		return !IsInMinMax(A,A_pole_min,A_pole_max);
+		return !IsInMinMax(A, conf.A_pole_min, conf.A_pole_max);
 	}
 
 	bool IsInMinMax(double value, double min, double max)
@@ -47,88 +57,87 @@ public:
 		return value > min && value < max;
 	}
 
-	bool CIsInPole(T C)
+	bool CIsInPole(double C)
 	{
-		return !IsInMinMax(C,C_pole_min,C_pole_max);
+		return !IsInMinMax(C, conf.C_pole_min, conf.C_pole_max);
 	}
 
-	T To0_360Space(T angle)
+	double To0_360Space(double angle)
 	{
-		angle=fmod(angle,T(2*M_PI));
-		if(angle<0)angle=2*M_PI+angle;
+		angle = fmod(angle, double(2 * M_PI));
+		if (angle < 0)angle = 2 * M_PI + angle;
 		return angle;
 	}
-	bool AIsMoveOverPole(T start,T end)
+	bool AIsMoveOverPole(double start, double end)
 		//перемещение вокруг оси A идет через полюс
 		//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
 	{
-		return start>A_pole_max||start<A_pole_min||
-			end>A_pole_max||end<A_pole_min;
+		return start > conf.A_pole_max || start<conf.A_pole_min ||
+			end>conf.A_pole_max || end < conf.A_pole_min;
 	}
-	bool CIsMoveOverPole(T start,T end)
+	bool CIsMoveOverPole(double start, double end)
 		//перемещение вокруг оси C идет через полюс
 		//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
 	{
-		bool isvalid= start>C_pole_max||start<C_pole_min||
-			end>C_pole_max||end<C_pole_min;
+		bool isvalid = start > conf.C_pole_max || start<conf.C_pole_min ||
+			end>conf.C_pole_max || end < conf.C_pole_min;
 		return isvalid;
 	}
 };
 
-#include "Uni5axis.h"
-
-template<class T,class TMachineToolKinematics>
-class TATPProcessor:public TMachineToolKinematics
+class TATPProcessor
 {
 public:
 
-	T tolerance;
-	T rapid_tolerance;
-	T rapid_feed;
-	T contour_max_feed;
+	double tolerance;
+	double rapid_tolerance;
+	double rapid_feed;
+	double contour_max_feed;
 	int frames_on_1sec_max;
 
-	T pole_change_height;
-	T pole_change_engage_height;
+	double pole_change_height;
+	double pole_change_engage_height;
 
 	bool circle_interpolation_center_absol;
 
-	TATPProcessor(std::map<string,string> &ini_params):TMachineToolKinematics(ini_params)
+	Utils utils;
+
+	TATPProcessor(std::map<string,string> &ini_params)
 	{
-		tolerance=atof(ini_params["tolerance"].c_str());
-		rapid_tolerance=atof(ini_params["rapid_tolerance"].c_str());
-		rapid_feed=atof(ini_params["rapid_feed"].c_str());
-		contour_max_feed=atof(ini_params["contour_max_feed"].c_str());
-		frames_on_1sec_max = atoi(ini_params["frames_on_1sec_max"].c_str());
+		//tolerance=atof(ini_params["tolerance"].c_str());
+		//rapid_tolerance=atof(ini_params["rapid_tolerance"].c_str());
+		//rapid_feed=atof(ini_params["rapid_feed"].c_str());
+		//contour_max_feed=atof(ini_params["contour_max_feed"].c_str());
+		//frames_on_1sec_max = atoi(ini_params["frames_on_1sec_max"].c_str());
 
-		pole_change_height=atof(ini_params["pole_change_height"].c_str());
-		pole_change_engage_height=atof(ini_params["pole_change_engage_height"].c_str());
+		//pole_change_height=atof(ini_params["pole_change_height"].c_str());
+		//pole_change_engage_height=atof(ini_params["pole_change_engage_height"].c_str());
 
-		circle_interpolation_center_absol=atoi(ini_params["circle_interpolation_center_absol"].c_str());
+		//circle_interpolation_center_absol=atoi(ini_params["circle_interpolation_center_absol"].c_str());
 	}
 
-	struct TKinematicsNode:public TKinematicsPair<T>
+	struct TKinematicsNode:public TKinematicsPair
 	{
 		bool move_over_pole[2];		//индекс в массив - текущий проверяемый вариант, но не текущая линия (т.к. маршруты перекрываются)
 		bool change_line[2];
 
-		T A_pole_change_delta[2];	//
-		T C_pole_change_delta[2];	//
-		T A_inc[2];					//
-		T C_inc[2];					//
+		double A_pole_change_delta[2];	//
+		double C_pole_change_delta[2];	//
+		double A_inc[2];					//
+		double C_inc[2];					//
 		int poles_count[2];			//
 
 		int best_line;
-		T tol;
+		double tol;
 	};
 
-	struct TPipelineElement:public TMachineState<T>
+	struct TPipelineElement:public TMachineState
 	{
-		TToolOrientation<T> tool_orient;
+		TToolOrientation tool_orient;
 		TKinematicsNode machine_orient;
 	};
 
-	T min(T v0, T v1)
+	double min(double v0, double v1)
 	{
 		if (v0 < v1)
 			return v0;
@@ -136,24 +145,24 @@ public:
 			return v1;
 	}
 	
-	bool IsCCWMove(T a0,T a1,T& dist)
+	bool IsCCWMove(double a0,double a1,double& dist)
 		//result - направление наикратчайшего перемещения из a0 в a1
 		//dist - величина и знак перемещения (+ это CCW)
 	{
-		a0=To0_360Space(a0);
-		a1=To0_360Space(a1);
-		T dist_0=abs(a0-a1);
-		T dist_1=abs(2*M_PI-abs(dist_0));
+		a0=utils.To0_360Space(a0);
+		a1= utils.To0_360Space(a1);
+		double dist_0=abs(a0-a1);
+		double dist_1=abs(2*M_PI-abs(dist_0));
 
 		bool result=(dist_0<dist_1)?(a1>a0):(a1<a0);
 		dist=(result?1.0:-1.0)*min(dist_0,dist_1);
 		return result;
 	}
 
-	T MovementCost(TKinematics<T> v0,TKinematics<T> v1)
+	double MovementCost(TKinematics v0,TKinematics v1)
 		//result - стоимость перемещения по наикратчайшему пути из v0 в v1
 	{
-		T da,dc;
+		double da,dc;
 		IsCCWMove(v0.A,v1.A,da);
 		IsCCWMove(v0.C,v1.C,dc);
 		return sqrt(sqr(da)+sqr(dc));
@@ -184,24 +193,24 @@ public:
 		return result;
 	}
 
-	T min_tol;
-	T max_tol;
+	double min_tol;
+	double max_tol;
 
-	T GetInterpolationTolerance(TKinematics<T> p0,TKinematics<T> p1,TToolOrientation<T> &middle_tool)
+	double GetInterpolationTolerance(TKinematics p0,TKinematics p1,TToolOrientation<double> &middle_tool)
 	{
-		TVec<T,3> kp0,kp1,kp_middle,tool_dir0,tool_dir1;
-		TKinematics<T> k;
+		TVec<double,3> kp0,kp1,kp_middle,tool_dir0,tool_dir1;
+		TKinematics k;
 
 		FromMachineToolKinematics(p0,kp0,tool_dir0);
 		FromMachineToolKinematics(p1,kp1,tool_dir1);
 
-		TKinematics<T> middle;
+		TKinematics middle;
 		middle.A=(p0.A+p1.A)*0.5; //TODO можно перейти к кинематике как к 5мерному вектору -> получаем простейшую интерполяцию и расстояние
 		middle.C=(p0.C+p1.C)*0.5;
 		middle.pos=(p0.pos+p1.pos)*0.5;
 		FromMachineToolKinematics(middle,middle_tool.pos,middle_tool.dir);
 
-		T tol=((kp0+kp1)*0.5).Distance(middle_tool.pos);
+		double tol=((kp0+kp1)*0.5).Distance(middle_tool.pos);
 		if(tol>max_tol)max_tol=tol;
 		if(tol<min_tol)min_tol=tol;
 
@@ -211,7 +220,7 @@ public:
 		return tol;
 	}
 
-	void GetMovement(TKinematics<T> p0,TKinematics<T> p1,T& delta_A,T& delta_C)
+	void GetMovement(TKinematics p0,TKinematics p1,double& delta_A,double& delta_C)
 		//delta_A,delta_C - приращения необходимые для перемещения из кинематики 0 в кинематику 1
 	{
 		IsCCWMove(p0.A,p1.A,delta_A);
@@ -239,7 +248,7 @@ public:
 		}
 	}
 
-	bool IsOrthogonalVector(TVec<T,3> v,int& axis,bool& pos_dir)
+	bool IsOrthogonalVector(TVec<double,3> v,int& axis,bool& pos_dir)
 	{
 		int c=0;
 		for(int i=0;i<3;i++)
@@ -256,9 +265,9 @@ public:
 			return false;
 	}
 
-	void CircleLinearApprox(TVec<T,2> v0,TVec<T,2> v1,T rad,T arc_error,std::vector<TVec<T,2>>& result,bool nearest_arc,bool ccw,bool full_circle=false)
+	void CircleLinearApprox(TVec<double,2> v0,TVec<double,2> v1,double rad,double arc_error,std::vector<TVec<double,2>>& result,bool nearest_arc,bool ccw,bool full_circle=false)
 	{
-		T l0,l1,dist;
+		double l0,l1,dist;
 		if(nearest_arc)
 		{
 			l0=To0_360Space(AngleFromDir(v0));
@@ -281,9 +290,9 @@ public:
 		result.back()=v1;
 		for(int i=1;i<points_high;i++)
 		{
-			//T ang=l0*(points_high-i)/(T)points_high+l1*i/(T)points_high;
-			T ang=l0+dist*i/(T)points_high;
-			result[i]=TVec<T,2>(cos(ang),sin(ang));
+			//double ang=l0*(points_high-i)/(double)points_high+l1*i/(double)points_high;
+			double ang=l0+dist*i/(double)points_high;
+			result[i]=TVec<double,2>(cos(ang),sin(ang));
 		}
 	}
 
@@ -295,7 +304,7 @@ public:
 	void CalcCircleParameters(std::vector<TPipelineElement> &pipe)//TODO пока что здесь все дуги разбиваются на мелкие линейные отрезки
 	{
 
-		std::vector<TVec<T,2>> points;
+		std::vector<TVec<double,2>> points;
 		std::vector<TPipelineElement> new_pipe;
 		new_pipe.reserve(pipe.size());
 
@@ -324,9 +333,9 @@ public:
 				bool pos_dir;
 				if((use_circles&&!IsOrthogonalVector(pipe[i].normal,axis,pos_dir))||(!use_circles))
 				{
-					TVec<T,3> lx,ly,lz;
-					TVec<T,3> center=pipe[i].center;
-					T rad=pipe[i].radius;
+					TVec<double,3> lx,ly,lz;
+					TVec<double,3> center=pipe[i].center;
+					double rad=pipe[i].radius;
 
 					lx=(pipe[i-1].tool_orient.pos-center).GetNormalized();
 					lz=pipe[i].normal;
@@ -335,25 +344,25 @@ public:
 					if(pipe[i].spiral_times!=-1)
 					{
 						points.clear();
-						std::vector<TVec<T,2>> _points;
+						std::vector<TVec<double,2>> _points;
 						ly=lz.Cross((pipe[i-1].tool_orient.pos-center).GetNormalized()).GetNormalized();
 						lx=ly.Cross(lz);
 
 						for(int t=0;t<pipe[i].spiral_times-1;t++)
 						{
-							CircleLinearApprox(TVec<T,2>(1,0),TVec<T,2>(1,0),
+							CircleLinearApprox(TVec<double,2>(1,0),TVec<double,2>(1,0),
 								rad,0.01,_points,false,false,true);
 							for(int k=0;k<_points.size();k++)points.push_back(_points[k]);
 						}
-						CircleLinearApprox(TVec<T,2>(1,0),TVec<T,2>(
+						CircleLinearApprox(TVec<double,2>(1,0),TVec<double,2>(
 							(pipe[i].tool_orient.pos-center)*lx,
 							(pipe[i].tool_orient.pos-center)*ly).GetNormalized(),
 							rad,0.01,_points,false,false);
 						for(int k=0;k<_points.size();k++)points.push_back(_points[k]);
 					}else
 					{
-						CircleLinearApprox(TVec<T,2>(1,0),
-							TVec<T,2>(
+						CircleLinearApprox(TVec<double,2>(1,0),
+							TVec<double,2>(
 							(pipe[i].tool_orient.pos-center)*lx,
 							(pipe[i].tool_orient.pos-center)*ly).GetNormalized(),
 							rad,0.01,points,false,false);
@@ -364,9 +373,9 @@ public:
 
 					//}else
 					{
-						T z_step=lz*(pipe[i].tool_orient.pos-pipe[i-1].tool_orient.pos);
-						T z_first=pipe[i-1].tool_orient.pos[2];
-						T z_last=pipe[i].tool_orient.pos[2];
+						double z_step=lz*(pipe[i].tool_orient.pos-pipe[i-1].tool_orient.pos);
+						double z_first=pipe[i-1].tool_orient.pos[2];
+						double z_last=pipe[i].tool_orient.pos[2];
 
 						pipe[i].mask=PrimitiveMask::LINE;
 						int points_count=points.size();
@@ -380,19 +389,19 @@ public:
 							pipe[last_point].tool_orient=pipe[i].tool_orient;
 							
 
-							*(TMachineState<T>*)&pipe[last_point]=*(TMachineState<T>*)&pipe[i];
+							*(TMachineState<double>*)&pipe[last_point]=*(TMachineState<double>*)&pipe[i];
 
 							pipe[last_point].mask=PrimitiveMask::LINE;
 
 							for(int t=1;t<points_count-1;t++)
 							{
-								*(TMachineState<T>*)&pipe[i+t-1]=*(TMachineState<T>*)&pipe[last_point];
+								*(TMachineState<double>*)&pipe[i+t-1]=*(TMachineState<double>*)&pipe[last_point];
 								pipe[i+t-1].mask=PrimitiveMask::LINE;
 								
 								if(pipe[i].spiral_times!=-1)
 								{
 									pipe[i+t-1].tool_orient.pos=(lx*points[t][0]+ly*points[t][1])*rad+center;
-									pipe[i+t-1].tool_orient.pos[2]=Blend(z_first,z_last,(t)/T(points_count));
+									pipe[i+t-1].tool_orient.pos[2]=Blend(z_first,z_last,(t)/double(points_count));
 								}else
 									pipe[i+t-1].tool_orient.pos=(lx*points[t][0]+ly*points[t][1])*rad+center;
 
@@ -430,11 +439,11 @@ public:
 				Swap(pipe[i+1].machine_orient.variant[0],pipe[i+1].machine_orient.variant[1]);
 	}
 
-	void GetCWithMaxX(TVec<T,3> tool_pos,T A,T initial_C,T& result_C,TVec<T,3>& result_pos)
+	void GetCWithMaxX(TVec<double,3> tool_pos,double A,double initial_C,double& result_C,TVec<double,3>& result_pos)
 	{
-		T step=DegToRad(2.0);
-		T dist=10e20;
-		TVec<T,3> init_pos,p0,p1,t;
+		double step=DegToRad(2.0);
+		double dist=10e20;
+		TVec<double,3> init_pos,p0,p1,t;
 		//while(dist>1)
 		{
 			init_pos=ToMachineToolKinematics(tool_pos,A,initial_C);
@@ -486,7 +495,7 @@ public:
 			}break;
 		case 1://критерий максимальной координаты по X (для ТФЦ-600)
 			{
-				//T step=DegToRad(2.0);
+				//double step=DegToRad(2.0);
 				//if(pipe[0].machine_orient.any_C)
 				//{
 				//	ToMachineToolKinematics(pipe[0].tool_orient.pos,pipe[0].tool_orient.dir,pipe[0].machine_orient);
@@ -496,9 +505,9 @@ public:
 				//		||pipe[i].mask&PrimitiveMask::LINE)
 				//		if(pipe[i].machine_orient.any_C)
 				//		{
-				//			T initial_C=pipe[i-1].machine_orient.variant[0].C;
-				//			T result_C;
-				//			TVec<T,3> result_pos;
+				//			double initial_C=pipe[i-1].machine_orient.variant[0].C;
+				//			double result_C;
+				//			TVec<double,3> result_pos;
 
 				//			if(true)
 				//			{
@@ -509,9 +518,9 @@ public:
 				//				pipe[i].machine_orient.variant[1].C=result_C;
 				//			}else
 				//			{
-				//				TVec<T,3> pos0=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C);
-				//				TVec<T,3> pos1=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C+step);
-				//				TVec<T,3> pos2=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C-step);
+				//				TVec<double,3> pos0=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C);
+				//				TVec<double,3> pos1=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C+step);
+				//				TVec<double,3> pos2=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,initial_C-step);
 
 				//				if(pos0[0]>pos1[0]&&pos0[0]>pos2[0])
 				//				{
@@ -547,10 +556,10 @@ public:
 				//		||pipe[i].mask&PrimitiveMask::LINE)
 				//		if(pipe[i].machine_orient.any_C)
 				//		{
-				//			TKinematicsPair<T> pair;
+				//			TKinematicsPair<double> pair;
 				//			ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].tool_orient.pos.GetNormalized(),pair);//TODO а если позиция будет равна нулю?
-				//			T result_C=pair.variant[0].C;
-				//			TVec<T,3> pos=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,result_C);
+				//			double result_C=pair.variant[0].C;
+				//			TVec<double,3> pos=ToMachineToolKinematics(pipe[i].tool_orient.pos,pipe[i].machine_orient.variant[0].A,result_C);
 				//			pipe[i].machine_orient.variant[0].pos=pos;
 				//			pipe[i].machine_orient.variant[1].pos=pos;
 				//			pipe[i].machine_orient.variant[0].C=result_C;
@@ -565,8 +574,8 @@ public:
 	{
 		int curr_line=line;
 		if(!pipe[0].machine_orient.valid[curr_line])curr_line=!line;
-		T curr_A=AToMachineRange(pipe[0].machine_orient.variant[curr_line].A);
-		T curr_C=CToMachineRange(pipe[0].machine_orient.variant[curr_line].C);
+		double curr_A=AToMachineRange(pipe[0].machine_orient.variant[curr_line].A);
+		double curr_C=CToMachineRange(pipe[0].machine_orient.variant[curr_line].C);
 
 		for(int i=0;i<pipe.size();i++)
 		{
@@ -581,7 +590,7 @@ public:
 
 					TKinematicsNode *next=&pipe[i+1].machine_orient;
 
-					T delta_A,delta_C;
+					double delta_A,delta_C;
 
 					//GetMovement(curr->variant[curr_line],next->variant[curr_line],delta_A,delta_C);
 					IsCCWMove(curr_A,next->variant[curr_line].A,delta_A);
@@ -598,8 +607,8 @@ public:
 						if(curr->valid[!curr_line])
 						{
 							curr->change_line[curr_line]=true;
-							T new_A=AToMachineRange(curr->variant[!curr_line].A);
-							T new_C=CToMachineRange(curr->variant[!curr_line].C);
+							double new_A=AToMachineRange(curr->variant[!curr_line].A);
+							double new_C=CToMachineRange(curr->variant[!curr_line].C);
 
 							curr->A_pole_change_delta[line]=new_A-curr_A;
 							curr->C_pole_change_delta[line]=new_C-curr_C;
@@ -615,8 +624,8 @@ public:
 						{
 							curr->change_line[curr_line]=false;
 							//TODO обработка случая когда сменить полюс нельза а надо раскручиваться по C
-							T new_A=AToMachineRange(curr->variant[curr_line].A);
-							T new_C=CToMachineRange(curr->variant[curr_line].C);
+							double new_A=AToMachineRange(curr->variant[curr_line].A);
+							double new_C=CToMachineRange(curr->variant[curr_line].C);
 
 							curr->A_pole_change_delta[line]=new_A-curr_A;
 							curr->C_pole_change_delta[line]=new_C-curr_C;
@@ -651,19 +660,19 @@ public:
 		}
 	}
 
-	void StandartRetractEngageChangePole(int i,int curr_line,int line,T curr_A,T curr_C,std::vector<TPipelineElement> &pipe,std::vector<TToolMovementElement<T>> &result_pipe)
+	void StandartRetractEngageChangePole(int i,int curr_line,int line,double curr_A,double curr_C,std::vector<TPipelineElement> &pipe,std::vector<TToolMovementElement<double>> &result_pipe)
 	{
 
-		//TVec<T,3> retract_pos=pipe[i].machine_orient.variant[curr_line].pos+pipe[i].tool_orient.dir*pole_change_height;
+		//TVec<double,3> retract_pos=pipe[i].machine_orient.variant[curr_line].pos+pipe[i].tool_orient.dir*pole_change_height;
 
-		TVec<T,3> retract_pos=ToMachineToolKinematics(pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height,
+		TVec<double,3> retract_pos=ToMachineToolKinematics(pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height,
 			pipe[i].machine_orient.variant[curr_line].A,
 			pipe[i].machine_orient.variant[curr_line].C);
 
-		TToolMovementElement<T> t;
+		TToolMovementElement<double> t;
 		t.tool_orient.dir=pipe[i].tool_orient.dir;
 		t.tool_orient.pos=pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height;
-		*(TMachineState<T>*)&t=pipe[i];
+		*(TMachineState<double>*)&t=pipe[i];
 		t.A=curr_A;
 		t.C=curr_C;
 		t.pos=retract_pos;
@@ -673,15 +682,15 @@ public:
 		curr_A+=pipe[i].machine_orient.A_pole_change_delta[line];
 		curr_C+=pipe[i].machine_orient.C_pole_change_delta[line];
 
-		//TVec<T,3> t0=pipe[i].machine_orient.variant[!curr_line].pos+pipe[i].tool_orient.dir*pole_change_height;
+		//TVec<double,3> t0=pipe[i].machine_orient.variant[!curr_line].pos+pipe[i].tool_orient.dir*pole_change_height;
 
-		TVec<T,3> t0=ToMachineToolKinematics(pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height,
+		TVec<double,3> t0=ToMachineToolKinematics(pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height,
 			pipe[i].machine_orient.variant[!curr_line].A,
 			pipe[i].machine_orient.variant[!curr_line].C);
 
 		t.tool_orient.dir=pipe[i].tool_orient.dir;
 		t.tool_orient.pos=pipe[i].tool_orient.pos+pipe[i].tool_orient.dir*pole_change_height;
-		*(TMachineState<T>*)&t=pipe[i];
+		*(TMachineState<double>*)&t=pipe[i];
 		t.A=curr_A;
 		t.C=curr_C;
 		t.pos=t0;
@@ -690,38 +699,38 @@ public:
 
 		t0=pipe[i].machine_orient.variant[!curr_line].pos;
 		t.tool_orient=pipe[i].tool_orient;
-		*(TMachineState<T>*)&t=pipe[i];
+		*(TMachineState<double>*)&t=pipe[i];
 		t.A=curr_A;
 		t.C=curr_C;
 		t.pos=t0;
 		t.rapid=true;
 		result_pipe.push_back(t);
 
-		//TVec<T,3> t1=pipe[i].machine_orient.variant[!curr_line].pos+pipe[i].tool_orient.dir*pole_change_engage_height;
+		//TVec<double,3> t1=pipe[i].machine_orient.variant[!curr_line].pos+pipe[i].tool_orient.dir*pole_change_engage_height;
 		//t.tool_orient=pipe[i].tool_orient;
-		//*(TMachineState<T>*)&t=pipe[i];
+		//*(TMachineState<double>*)&t=pipe[i];
 		//t.A=curr_A;
 		//t.C=curr_C;
 		//t.pos=t1;
 		//t.rapid=true;
 		//result_pipe.push_back(t);
 
-		//TVec<T,3> t2=pipe[i].machine_orient.variant[!curr_line].pos;
+		//TVec<double,3> t2=pipe[i].machine_orient.variant[!curr_line].pos;
 		//t.tool_orient=pipe[i].tool_orient;
-		//*(TMachineState<T>*)&t=pipe[i];
+		//*(TMachineState<double>*)&t=pipe[i];
 		//t.A=curr_A;
 		//t.C=curr_C;
 		//t.pos=t2;
 		//result_pipe.push_back(t);
 	}
 
-	void SelectBestLine(std::vector<TPipelineElement> &pipe,std::vector<TToolMovementElement<T>> &result_pipe)
+	void SelectBestLine(std::vector<TPipelineElement> &pipe,std::vector<TToolMovementElement<double>> &result_pipe)
 	{
 		int line=0;
 		int curr_line=line;
 		if(!pipe[0].machine_orient.valid[curr_line])curr_line=!line;
-		T curr_A=AToMachineRange(pipe[0].machine_orient.variant[curr_line].A);
-		T curr_C=CToMachineRange(pipe[0].machine_orient.variant[curr_line].C);
+		double curr_A=AToMachineRange(pipe[0].machine_orient.variant[curr_line].A);
+		double curr_C=CToMachineRange(pipe[0].machine_orient.variant[curr_line].C);
 		for(int i=0;i<pipe.size();i++)
 		{
 			TKinematicsNode *curr=&pipe[i].machine_orient;
@@ -729,10 +738,10 @@ public:
 			{
 			case PrimitiveMask::LINE:
 				{
-					TToolMovementElement<T> t;
+					TToolMovementElement<double> t;
 					t.tool_orient=pipe[i].tool_orient;
-					*(TMachineState<T>*)&t=pipe[i];
-					*(TKinematics<T>*)&t=pipe[i].machine_orient.variant[curr_line];
+					*(TMachineState<double>*)&t=pipe[i];
+					*(TKinematics*)&t=pipe[i].machine_orient.variant[curr_line];
 					t.A=curr_A;
 					t.C=curr_C;
 					t.any_C=pipe[i].machine_orient.any_C;
@@ -755,10 +764,10 @@ public:
 				}break;
 			case PrimitiveMask::CIRCLE:
 				{
-					TToolMovementElement<T> t;
+					TToolMovementElement<double> t;
 					t.tool_orient=pipe[i].tool_orient;
-					*(TMachineState<T>*)&t=pipe[i];
-					*(TKinematics<T>*)&t=pipe[i].machine_orient.variant[curr_line];
+					*(TMachineState<double>*)&t=pipe[i];
+					*(TKinematics*)&t=pipe[i].machine_orient.variant[curr_line];
 					t.A=curr_A;
 					t.C=curr_C;
 					result_pipe.push_back(t);
@@ -769,26 +778,26 @@ public:
 		}
 	}
 
-	void GetGCode(std::vector<TToolMovementElement<T>> &pipe,std::string& result_code)
+	void GetGCode(std::vector<TToolMovementElement<double>> &pipe,std::string& result_code)
 	{
 		result_code="";
 		if(pipe.size()==0)return;
 		char* buff=new char[10000000];//TODO сюда записывается текст из auxfun котоорый может быть очень болььшим
-		T curr_feed=0/*pipe[0].feed*/;
+		double curr_feed=0/*pipe[0].feed*/;
 		int curr_cutcom=0;
 		string curr_path_name;
-		T curr_spndl_rpm=pipe[0].spndl_rpm;
+		double curr_spndl_rpm=pipe[0].spndl_rpm;
 		bool curr_clw=pipe[0].clw;
 		//if(curr_feed==0)curr_feed=1500;//TODO
 		int frame_number=1;
 
 		bool oriented_from_goto_engage_done=false;
 		
-		T curr_coord[5];//текущие координаты
-		T curr_coord_machine[5];//текущие координаты с учетом округления(используется при инкрементном режиме для устранения накапливающейся ошбки округления)
+		double curr_coord[5];//текущие координаты
+		double curr_coord_machine[5];//текущие координаты с учетом округления(используется при инкрементном режиме для устранения накапливающейся ошбки округления)
 		bool need_print[5]={0,0,0,0,0};
 
-		T* new_coord=&pipe[0].pos[0];
+		double* new_coord=&pipe[0].pos[0];
 		for(int c=0;c<5;c++)
 		{
 			curr_coord[c]=new_coord[c]+2*gcode_axis_prop[c].repeat_tol;
@@ -882,7 +891,7 @@ public:
 					for(int c=0;c<5;c++)
 					{
 						bool last_need_print=need_print[c];
-						T tol=gcode_axis_prop[c].rad_to_deg?DegToRad(gcode_axis_prop[c].repeat_tol):gcode_axis_prop[c].repeat_tol;
+						double tol=gcode_axis_prop[c].rad_to_deg?DegToRad(gcode_axis_prop[c].repeat_tol):gcode_axis_prop[c].repeat_tol;
 						need_print[c]=
 							tol<=abs(new_coord[c]-curr_coord[c])||!gcode_axis_prop[c].remove_repeat;
 						if(need_print[c]&&gcode_axis_prop[c].force_rapid_change)
@@ -901,7 +910,7 @@ public:
 					sprintf(buff,"%s",pipe[i].auxfun.c_str());
 					result_code+=buff;
 					//если направление инструмента 0,0,-1 то надо сменить коррекцию на противоположную
-					if(pipe[i].tool_orient.dir.Distance(TVec<T,3>(0,0,-1))<0.0001)
+					if(pipe[i].tool_orient.dir.Distance(TVec<double,3>(0,0,-1))<0.0001)
 					{
 						if(pipe[i].cutcom==1)pipe[i].cutcom=2;
 						if(pipe[i].cutcom==2)pipe[i].cutcom=1;
@@ -927,7 +936,7 @@ public:
 						int g_move_mode=-1;
 						if(pipe[i].mask==PrimitiveMask::CIRCLE)
 						{
-							g_move_mode=(pipe[i].normal*TVec<T,3>(1,1,1).GetNormalized()>0)?2:3;
+							g_move_mode=(pipe[i].normal*TVec<double,3>(1,1,1).GetNormalized()>0)?2:3;
 						}else
 						{
 							g_move_mode=(pipe[i].rapid||force_rapid_change)?0:1;
@@ -947,14 +956,14 @@ public:
 					{
 						if(need_print[c])
 						{
-							T new_coord_val=
+							double new_coord_val=
 								gcode_axis_prop[c].rad_to_deg
 								?RadToDeg(new_coord[c])
 								:new_coord[c];
 
 							if(gcode_axis_prop[c].is_increment)
 							{
-								T inc_val=new_coord_val-curr_coord_machine[c];
+								double inc_val=new_coord_val-curr_coord_machine[c];
 								sprintf(buff,gcode_axis_prop[c].format.c_str(),inc_val);//TODO из-за округления будет накапливаться ошибка DONE
 								inc_val=floor(inc_val/gcode_axis_prop[c].repeat_tol+0.5)*gcode_axis_prop[c].repeat_tol;
 
@@ -968,9 +977,9 @@ public:
 					}
 					if(pipe[i].mask==PrimitiveMask::CIRCLE)
 					{
-						TVec<T,3> center=pipe[i].center;
-						TVec<T,3> machine_center=ToMachineToolKinematics(center,pipe[i].A,pipe[i].C);
-						TVec<T,3> machine_last_pos=ToMachineToolKinematics(pipe[i].pos,pipe[i].A,pipe[i].C);
+						TVec<double,3> center=pipe[i].center;
+						TVec<double,3> machine_center=ToMachineToolKinematics(center,pipe[i].A,pipe[i].C);
+						TVec<double,3> machine_last_pos=ToMachineToolKinematics(pipe[i].pos,pipe[i].A,pipe[i].C);
 
 						int rot_axis;
 						bool positive;
@@ -1048,7 +1057,7 @@ public:
 				//}break;
 			//case PrimitiveMask::CIRCLE:
 				/*{
-					TVec<T,3> prev_pos=pipe[i-1].pos,
+					TVec<double,3> prev_pos=pipe[i-1].pos,
 						next_pos=pipe[i].pos,
 						center;
 					if(circle_interpolation_center_absol)
@@ -1082,14 +1091,14 @@ public:
 	}
 
 	
-	T MovementDistance(TKinematics<T> k0,TKinematics<T> k1)//в отличие от предыдущей версии считает перемещение по всем координатам в линейном виде
+	double MovementDistance(TKinematics k0,TKinematics k1)//в отличие от предыдущей версии считает перемещение по всем координатам в линейном виде
 	{
 		return sqrt(k0.pos.SqrDistance(k1.pos)+sqr(k0.A-k1.A)+sqr(k0.C-k1.C));
 	}
 
 
 
-	void CalculateMoveTime(std::vector<TToolMovementElement<T>> &pipe,double &fast_movement_time,double &work_movement_time)
+	void CalculateMoveTime(std::vector<TToolMovementElement<double>> &pipe,double &fast_movement_time,double &work_movement_time)
 	{
 		fast_movement_time=0;
 		work_movement_time=0;
@@ -1107,16 +1116,16 @@ public:
 				}break;
 			case PrimitiveMask::CIRCLE:
 				{
-					TVec<T,3> lx,ly,lz;
-					TVec<T,3> center=pipe[i].center;
-					T rad=pipe[i].radius;
+					TVec<double,3> lx,ly,lz;
+					TVec<double,3> center=pipe[i].center;
+					double rad=pipe[i].radius;
 
 					lx=(pipe[i-1].tool_orient.pos-center).GetNormalized();
 					lz=pipe[i].normal;
 					ly=lz.Cross(lx);
 					
 					pipe[i].move_distance=rad*abs(AngleFromDir(
-						TVec<T,2>(
+						TVec<double,2>(
 						(pipe[i].tool_orient.pos-center)*lx,
 						(pipe[i].tool_orient.pos-center)*ly).GetNormalized()))+(pipe[i].spiral_times!=-1?2*M_PI*pipe[i].spiral_times:0);
 				}break;
@@ -1130,12 +1139,12 @@ public:
 		}
 	}
 
-	void CalculateContourSpeed(std::vector<TToolMovementElement<T>> &pipe)
+	void CalculateContourSpeed(std::vector<TToolMovementElement<double>> &pipe)
 	{
 		pipe[0].contour_correct_feed=pipe[0].feed;
 		for(int i=1;i<=pipe.size()-1;i++)
 		{
-			T dist=pipe[i].tool_orient.pos.Distance(pipe[i-1].tool_orient.pos);
+			double dist=pipe[i].tool_orient.pos.Distance(pipe[i-1].tool_orient.pos);
 			
 			/*pipe[i].contour_correct_feed=ClampMax(contour_max_feed,
 				pipe[i].feed*
@@ -1144,14 +1153,14 @@ public:
 		}
 	}
 
-	bool MergeFrames(std::vector<TToolMovementElement<T>> &pipe,int window_start,int window_end)
+	bool MergeFrames(std::vector<TToolMovementElement<double>> &pipe,int window_start,int window_end)
 		//return - произошло удаление элемента
 	{
 		int min_k=-1;
-		T min_time=0;
+		double min_time=0;
 		for(int k=window_start+1;k<=window_end-1;k++)
 		{
-			T temp=pipe[k].move_time+pipe[k+1].move_time;
+			double temp=pipe[k].move_time+pipe[k+1].move_time;
 			if((min_k==-1||temp<min_time)&&!pipe[k].base_element)
 			{
 				min_time=temp;
@@ -1166,14 +1175,14 @@ public:
 		}else return false;
 	}
 
-	void Compress(std::vector<TToolMovementElement<T>> &pipe)
+	void Compress(std::vector<TToolMovementElement<double>> &pipe)
 	{
 		int i=0;
 		while(true)
 		{
 			while(pipe[i].rapid&&i<pipe.size()-1)i++;
 			if(i==pipe.size()-1)break;
-			T time=0;
+			double time=0;
 			int window_end=i;
 			while(window_end-i<frames_on_1sec_max&&window_end<pipe.size()-1)
 			{
@@ -1216,7 +1225,7 @@ public:
 			}
 	}
 
-	void Subdivide(std::vector<TToolMovementElement<T>> &pipe)
+	void Subdivide(std::vector<TToolMovementElement<double>> &pipe)
 	{
 		std::vector<TVec<int,2>> count_after_pair;
 		count_after_pair.reserve(pipe.size()/3);
@@ -1224,10 +1233,10 @@ public:
 		{
 			if(pipe[i].mask==PrimitiveMask::LINE)
 			{
-				T tol=1000000;
+				double tol=1000000;
 				//while(tol>tolerance)
 				{
-					TToolMovementElement<T> new_el;
+					TToolMovementElement<double> new_el;
 					tol=GetInterpolationTolerance(pipe[i],pipe[i+1],new_el.tool_orient);
 					bool need_subdivide=false;
 					if(pipe[i].rapid)
@@ -1244,7 +1253,7 @@ public:
 			}
 		}
 		for (int i = 0; i < count_after_pair.size(); i++)
-			pipe.push_back(TToolMovementElement<T>());
+			pipe.push_back(TToolMovementElement<double>());
 		int off=0,curr_pair=0;
 		for(int i=0;i< pipe.size() - 1;i++)
 		{
@@ -1260,8 +1269,8 @@ public:
 					off+=count_inserted;
 
 
-					TVec<T,3> p0,p1,d0,d1;
-					T a0,a1,c0,c1;
+					TVec<double,3> p0,p1,d0,d1;
+					double a0,a1,c0,c1;
 					p0=pipe[i].tool_orient.pos;
 					p1=pipe[i+1+count_inserted].tool_orient.pos;
 					d0=pipe[i].tool_orient.dir.GetNormalized();
@@ -1273,7 +1282,7 @@ public:
 					//pipe.InsertCount((new_el_high+1)-2,i);
 					for(int t=1;t<new_el_high;t++)
 					{
-						TToolMovementElement<T> new_el;
+						TToolMovementElement<double> new_el;
 						new_el.tool_orient.pos=p0*(new_el_high-t)/new_el_high+p1*t/new_el_high;
 						new_el.feed=pipe[i].feed;
 						new_el.mask=pipe[i].mask;
@@ -1301,19 +1310,19 @@ public:
 
 	void ValidateKinematicsInverseAlgorithm(std::vector<TPipelineElement> &pipe)
 	{
-		T max_pos_tol=0;
-		T max_dir_tol=0;
+		double max_pos_tol=0;
+		double max_dir_tol=0;
 
 		for(int i=0;i<pipe.size()-1;i++)
 			if(pipe[i].mask&PrimitiveMask::CIRCLE
 				||pipe[i].mask&PrimitiveMask::LINE)
 		{
-			TVec<T,3> pos,dir;
+			TVec<double,3> pos,dir;
 			for(int k=0;k<(pipe[i].machine_orient.any_C?0:2);k++)
 			{
 				FromMachineToolKinematics(pipe[i].machine_orient.variant[k],pos,dir);
-				T tol0=pipe[i].tool_orient.dir.Distance(dir);
-				T tol1=pipe[i].tool_orient.pos.Distance(pos);
+				double tol0=pipe[i].tool_orient.dir.Distance(dir);
+				double tol1=pipe[i].tool_orient.pos.Distance(pos);
 
 				if(tol0>max_dir_tol)max_dir_tol=tol0;
 				if(tol1>max_pos_tol)max_pos_tol=tol1;
@@ -1329,9 +1338,9 @@ public:
 	void MakePipe(std::vector<TPipelineElement> &pipe,std::vector<TCLSFToken> &atp_tokens)
 	{
 		pipe.reserve(atp_tokens.size());
-		TVec<T,3> curr_dir(0,0,1);
-		T curr_feed=100;
-		T curr_spndl_rpm=0;
+		TVec<double,3> curr_dir(0,0,1);
+		double curr_feed=100;
+		double curr_spndl_rpm=0;
 		int curr_cutcom=0;//0-off 1-left 2-right
 		bool clw=true;
 		string curr_aux;
@@ -1348,7 +1357,7 @@ public:
 					atp_tokens[i].Name() =="FROM"||
 					atp_tokens[i].Name() =="GOHOME")
 				{
-					TVec<T,3> pos,dir;
+					TVec<double,3> pos,dir;
 					if(atp_tokens[i].ParamsCount()!=3&&atp_tokens[i].ParamsCount() !=6)
 						throw string("Not enough parameters in GOTO");
 					for(int k=0;k<3;k++)pos[k]=atof(atp_tokens[i][k].c_str());
@@ -1380,8 +1389,8 @@ public:
 				}
 				else if(atp_tokens[i].Name() =="CIRCLE")
 				{
-					TVec<T,3> center,normal;
-					T radius;
+					TVec<double,3> center,normal;
+					double radius;
 					TPipelineElement t;
 					t.spiral_times=-1;
 					if(atp_tokens[i].ParamsCount()<11)
@@ -1536,7 +1545,7 @@ public:
 		}
 	}
 
-	void PassThrough(std::vector<TCLSFToken> &atp_tokens,std::vector<TToolMovementElement<T>> &result_pipe,double &fast_movement_time,double &work_movement_time)
+	void PassThrough(std::vector<TCLSFToken> &atp_tokens,std::vector<TToolMovementElement<double>> &result_pipe,double &fast_movement_time,double &work_movement_time)
 	{
 		//using namespace boost::posix_time;
 		//using namespace boost::gregorian;
@@ -1554,7 +1563,7 @@ public:
 		
 		if(pipe.size()==0)return;
 
-		//std::vector<TToolMovementElement<T>> result_pipe;
+		//std::vector<TToolMovementElement<double>> result_pipe;
 		bool need_rebuild=false;
 		int max_rebuilds=1;
 		int rebuild=0;
@@ -1585,7 +1594,7 @@ public:
 		//done_time = microsec_clock::local_time();
 		//cout << " ("<< to_iso_string(done_time - now) <<")\n";
 	}
-	void GetCode(std::vector<TToolMovementElement<T>> &pipe,string &result_code,const char* ext_header,const char* prog_id)//только для standalone постов, далее убрать
+	void GetCode(std::vector<TToolMovementElement<double>> &pipe,string &result_code,const char* ext_header,const char* prog_id)//только для standalone постов, далее убрать
 	{
 		//boost::format header_format(G_code_header.c_str());
 		//header_format.exceptions( boost::io::all_error_bits ^ ( boost::io::too_many_args_bit | boost::io::too_few_args_bit )  );
@@ -1610,10 +1619,10 @@ public:
 		//	%prog_id
 		//	).str();
 		//result_code=G_code_header+result_code+G_code_footer;
-		//InsertGCodeHead(result_code,TVec<T,3>(),"",false);
+		//InsertGCodeHead(result_code,TVec<double,3>(),"",false);
 	}
-	//void GetCode(std::vector<TToolMovementElement<T>> &pipe,string &result_code,
-	//	TVec<T,3> use_offset, string use_machine_offset_string,bool use_machine_offset)//только для standalone постов, далее убрать
+	//void GetCode(std::vector<TToolMovementElement<double>> &pipe,string &result_code,
+	//	TVec<double,3> use_offset, string use_machine_offset_string,bool use_machine_offset)//только для standalone постов, далее убрать
 	//{
 	//	GetGCode(pipe,result_code);
 	//	result_code=(boost::format(G_code_header.c_str())%local_CS_G_index).str()+result_code+G_code_footer;
@@ -1621,3 +1630,4 @@ public:
 	//	//InsertGCodeHead(result_code,use_offset,use_machine_offset_string,use_machine_offset);
 	//}
 };
+}

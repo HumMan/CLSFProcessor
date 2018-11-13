@@ -1,0 +1,46 @@
+﻿<?xml version="1.0"?>
+<kinematics>
+	<part_system_x x="1" y="0" z="0" />
+	<part_system_y x="0" y="1" z="0" />
+	<part_system_z x="0" y="0" z="1" />
+	
+	<tool_dir x="0" y="0" z="-1" />
+	
+	<nodes>
+		<node>
+			<is_part_node 	value="0"/>
+			<is_linear  	value="1"/>
+			<axis_offset  	x="0" y="0" z="0" />
+			<axis  			x="1" y="0" z="0" />
+			<offset  		x="0" y="0" z="0" />
+		</node>
+		<node>
+			<is_part_node 	value="0"/>
+			<is_linear  	value="1"/>
+			<axis_offset  	x="0" y="0" z="0" />
+			<axis  			x="0" y="1" z="0" />
+			<offset  		x="0" y="0" z="0" />
+		</node>
+		<node>
+			<is_part_node 	value="0"/>
+			<is_linear  	value="1"/>
+			<axis_offset  	x="0" y="0" z="0" />
+			<axis  			x="0" y="0" z="1" />
+			<offset  		x="0" y="0" z="0" />
+		</node>
+		<node>
+			<is_part_node 	value="0"/>
+			<is_linear  	value="0"/>
+			<axis_offset  	x="0" y="0" z="0" />
+			<axis  			x="0" y="0" z="1" />
+			<offset  		x="0" y="0" z="0" />
+		</node>
+		<node>
+			<is_part_node 	value="0"/>
+			<is_linear  	value="0"/>
+			<axis_offset  	x="0" y="0" z="0" />
+			<axis  			x="1" y="0" z="0" />
+			<offset  		x="0" y="0" z="0" />
+		</node>
+	</nodes>
+</kinematics>

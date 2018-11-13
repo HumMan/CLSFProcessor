@@ -2,6 +2,10 @@
 
 using namespace CLSFProcessor;
 
+#include <fstream>
+#include <iostream>
+
+
 class TATPTokenizer
 {
 	//Source : (Token ('/' Parameters | '\n'))* '\0';
@@ -108,4 +112,21 @@ std::vector<TCLSFToken> CLSFProcessor::Parse(const char* use_source)
 {
 	TATPTokenizer tokenizer;
 	return tokenizer.Parse(use_source);
+}
+
+
+std::vector<TCLSFToken> CLSFProcessor::ParsePath(const char* use_file_path)
+{
+	std::ifstream clsf_file(use_file_path, std::ios::binary);
+	clsf_file.seekg(0, std::ios_base::end);
+	size_t size = clsf_file.tellg();
+	clsf_file.seekg(0, std::ios_base::beg);
+
+	char* clsf = new char[size + 1];
+	clsf_file.read(clsf, size);
+	clsf[size] = 0;
+
+	clsf_file.close();
+
+	return Parse(clsf);
 }

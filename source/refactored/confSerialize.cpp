@@ -9,11 +9,15 @@ Eigen::Vector3d ExtractV3d(pugi::xml_node node)
 	return Eigen::Vector3d(node.attribute("x").as_double(), node.attribute("y").as_double(), node.attribute("z").as_double());
 }
 
-void CLSFProcessor::ParseConfig(const char* config_path, Conf::TCommon& common_conf, Conf::TFiveAxis& five_axis_conf)
+void CLSFProcessor::ParseConfig(const std::string& config_path, Conf::TCommon& common_conf, Conf::TFiveAxis& five_axis_conf)
 {
-	pugi::xml_node ini_params;
-	int version = ini_params.child("version").attribute("id").as_int();
-	ini_params = ini_params.child("kinematics");
+	setlocale(LC_ALL, "C");
+	pugi::xml_document doc;
+	doc.load_file(pugi::as_wide(config_path.c_str()).c_str());
+	
+	int version = doc.child("version").attribute("id").as_int();
+
+	pugi::xml_node ini_params = doc.child("kinematics");
 	if (version == 1)
 	{
 		pugi::xml_node
