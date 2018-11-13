@@ -67,12 +67,16 @@ bool TUniversal5axis::GetRotationToNextPlane(Eigen::Vector3d curr, Eigen::Vector
 
 	double gamma = AngleBetween(next, _x);
 	Eigen::Vector2d d(p.dot(_x), p.dot(_y));
-	if (d.squaredNorm() < 0.0000001)any_rotation = true;
-	else any_rotation = false;
+	if (d.squaredNorm() < 0.0000001)
+		any_rotation = true;
+	else 
+		any_rotation = false;
 	double alpha = any_rotation ? 0 : AngleFromDir(d.normalized());
-	if (alpha < 0)alpha = 2 * M_PI + alpha;
+	if (alpha < 0)
+		alpha = 2 * M_PI + alpha;
 	double cone_angle = AngleBetween(curr, p);
-	if (gamma > cone_angle)return false;
+	if (gamma > cone_angle)
+		return false;
 	if (!any_rotation)
 	{
 		double betta = acos((curr.dot(next) > 0 ? -1 : 1)*gamma / cone_angle);

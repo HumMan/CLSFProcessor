@@ -1,4 +1,6 @@
-﻿#include <string>
+﻿#pragma once
+
+#include <string>
 #include <vector>
 #include <map>
 
@@ -6,6 +8,18 @@ namespace CLSFProcessor
 {
 	namespace Conf
 	{
+
+		struct TProcessor
+		{
+			double tolerance;
+			double rapid_tolerance;
+			double rapid_feed;
+			double contour_max_feed;
+			int frames_on_1sec_max;
+
+			bool circle_interpolation_center_absol;
+		};
+
 		struct TCommon
 		{
 			struct TGCodeAxisProperties
@@ -36,6 +50,7 @@ namespace CLSFProcessor
 
 			bool remove_F_repeat;
 			int any_C_criteria;
+
 
 			std::string G_code_header;
 			std::string G_code_footer;

@@ -7,6 +7,7 @@
 #include "refactored\atptokenizer.h"
 #include "refactored\confSerialize.h"
 #include "refactored\Uni5axis.h"
+#include "refactored/FiveAxisKinematics.h"
 
 int _tmain(int argc, _TCHAR* argv[])
 {

@@ -1,4 +1,8 @@
-﻿#include "kinematicsConf.h"
+﻿#pragma once
+
+#include "kinematicsConf.h"
+
+#define M_PI 3.14159265358979323846
 
 namespace CLSFProcessor
 {
@@ -9,10 +13,7 @@ namespace CLSFProcessor
 		CIRCLE = 2,
 	};
 
-	struct TToolOrientation
-	{
-		Eigen::Vector3d pos, dir;
-	};
+
 
 	typedef double TKinematics[5];
 
@@ -23,26 +24,49 @@ namespace CLSFProcessor
 		int undet_coord_id;
 	};
 
+	class TAngle
+	{
+		double value;//в радианах;
+		
+	public:
+		TAngle(double angle_in_radians)
+		{
+			value = angle_in_radians;
+		}
+		static TAngle FromDeg(double angle)
+		{
+			return TAngle(DegToRad(angle));
+		}
+		static TAngle FromRad(double angle)
+		{
+			return TAngle(angle);
+		}
+
+		double AsRad()
+		{
+			return value;
+		}
+		double AsDeg()
+		{
+			return value / 180.0 * M_PI;
+		}
+		double To0_360Space()
+		{
+			auto angle = fmod(value, double(2 * M_PI));
+			if (angle < 0)angle = 2 * M_PI + angle;
+			return angle;
+		}
+		static double DegToRad(double value)
+		{
+			return value / 180.0 * M_PI;
+		}
+	};
+
 	double AngleBetween(Eigen::Vector3d v0, Eigen::Vector3d v1);
 
 	double AngleFromDir(const Eigen::Vector2d& v);
 
-	struct TMachineState
-	{
-		PrimitiveMask mask;
-		std::string auxfun;
-		Eigen::Vector3d center, normal;
-		double radius;
-		int spiral_times;
-		double feed;
-		double spndl_rpm;
-		bool clw;//TODO разобраться с парсингом а то глючит
-		bool rapid;
-		int color;
-		bool base_element;//если true - элемент нельзя убрать при компрессии т.к. он исходный(существовавший до разбиения)
-		int cutcom;
-		std::string path_name;
-	};
+
 
 	class TUniversal5axis
 	{

@@ -9,6 +9,20 @@ Eigen::Vector3d ExtractV3d(pugi::xml_node node)
 	return Eigen::Vector3d(node.attribute("x").as_double(), node.attribute("y").as_double(), node.attribute("z").as_double());
 }
 
+void ParseCommon() 
+{
+	//tolerance=atof(ini_params["tolerance"].c_str());
+//rapid_tolerance=atof(ini_params["rapid_tolerance"].c_str());
+//rapid_feed=atof(ini_params["rapid_feed"].c_str());
+//contour_max_feed=atof(ini_params["contour_max_feed"].c_str());
+//frames_on_1sec_max = atoi(ini_params["frames_on_1sec_max"].c_str());
+
+//pole_change_height=atof(ini_params["pole_change_height"].c_str());
+//pole_change_engage_height=atof(ini_params["pole_change_engage_height"].c_str());
+
+//circle_interpolation_center_absol=atoi(ini_params["circle_interpolation_center_absol"].c_str());
+}
+
 void CLSFProcessor::ParseConfig(const std::string& config_path, Conf::TCommon& common_conf, Conf::TFiveAxis& five_axis_conf)
 {
 	setlocale(LC_ALL, "C");
