@@ -11,12 +11,13 @@
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	auto tokens = CLSFProcessor::ParsePath("c:/Users/kop3n/Documents/GitHub/CLSFProcessor/samples/ust_a3.cls");
+	//auto tokens = CLSFProcessor::ParsePath("c:/Users/kop3n/Documents/GitHub/CLSFProcessor/samples/ust_a3.cls");
 
 	CLSFProcessor::Conf::TCommon common_conf;
 	CLSFProcessor::Conf::TFiveAxis five_axis_conf;
+	CLSFProcessor::Conf::TProcessor processor_conf;
 
-	CLSFProcessor::ParseConfig("c:/Users/kop3n/Documents/GitHub/CLSFProcessor/config/jomax5dhead.xml", common_conf, five_axis_conf);
+	CLSFProcessor::ParseConfig("c:/Users/kop3n/Documents/GitHub/CLSFProcessor/config/jomax5dhead.xml", common_conf, processor_conf, five_axis_conf);
 
 	//while(true)
 	//{

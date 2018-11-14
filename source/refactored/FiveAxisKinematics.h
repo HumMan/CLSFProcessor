@@ -14,11 +14,11 @@ namespace CLSFProcessor
 {
 	namespace Funcs
 	{
-		double sqr(double value)
+		inline double sqr(double value)
 		{
 			return value * value;
 		}
-		//double AngleFromDir(Eigen::Vector2d vec)
+		//inline double AngleFromDir(Eigen::Vector2d vec)
 		//{
 		//	auto c = acos(vec[0]);
 		//	if (asin(vec[1]) > 0)
@@ -28,19 +28,24 @@ namespace CLSFProcessor
 		//}	
 
 
-		bool IsInMinMax(double value, double min, double max)
+		inline bool IsInMinMax(double value, double min, double max)
 		{
 			return value > min && value < max;
 		}
-		
-		double min(double v0, double v1)
+
+		inline bool IsInMinMax(TAngle value, TAngle min, TAngle max)
+		{
+			return value.AsRad() > min.AsRad() && value.AsRad() < max.AsRad();
+		}
+
+		inline double min(double v0, double v1)
 		{
 			if (v0 < v1)
 				return v0;
 			else
 				return v1;
 		}
-		double Blend(double v0, double v1, double factor)
+		inline double Blend(double v0, double v1, double factor)
 		{
 			return v0 * (1 - factor) + v1 * factor;
 		}
@@ -66,6 +71,12 @@ namespace CLSFProcessor
 
 		int best_line;
 		double tol;
+	};
+
+	enum PrimitiveMask
+	{
+		LINE = 1,
+		CIRCLE = 2,
 	};
 
 	struct TMachineState
@@ -106,45 +117,76 @@ namespace CLSFProcessor
 
 	class TATPProcessor
 	{
-	public:
+		CLSFProcessor::Conf::TCommon conf;
+		CLSFProcessor::Conf::TFiveAxis five_axis_conf;
+		CLSFProcessor::Conf::TProcessor processor_conf;
 
 		double min_tol;
 		double max_tol;
 
-		CLSFProcessor::Conf::TCommon conf;
+		int linear_node[3]; //индексы линейных звеньев
+		int rot_node[2]; //индексы поворотных звеньев
 
-		TATPProcessor(CLSFProcessor::Conf::TCommon conf)
+		TUniversal5axis machine;
+
+	public:		
+
+		TATPProcessor(Conf::TCommon common_conf, Conf::TFiveAxis five_axis_conf, Conf::TProcessor processor_conf)
+			:machine(five_axis_conf)
 		{
 			this->conf = conf;
+			this->five_axis_conf = five_axis_conf;
+			this->processor_conf = processor_conf;
+
+			int curr_linear = 0, curr_rot = 0;
+
+			for (int i = 0; i < five_axis_conf.nodes.size(); i++)
+			{
+				auto& node = five_axis_conf.nodes[i];
+				if (node.is_linear)
+				{
+					linear_node[curr_linear] = i;
+					curr_linear++;
+					if (curr_linear > 2)
+						throw std::exception("неверная конфигурация");
+				}
+				else if (!node.is_linear)
+				{
+					rot_node[curr_rot] = i;
+					curr_rot++;
+					if (curr_rot > 1)
+						throw std::exception("неверная конфигурация");
+				}
+			}
 		}
 
-		bool AIsInPole(double A)
+		bool AIsInPole(TAngle A)
 		{
 			return !Funcs::IsInMinMax(A, conf.A_pole_min, conf.A_pole_max);
 		}
-		bool CIsInPole(double C)
+		bool CIsInPole(TAngle C)
 		{
 			return !Funcs::IsInMinMax(C, conf.C_pole_min, conf.C_pole_max);
 		}
-		bool AIsMoveOverPole(double start, double end)
+		bool AIsMoveOverPole(TAngle start, TAngle end)
 			//перемещение вокруг оси A идет через полюс
 			//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
 		{
-			return start > conf.A_pole_max || start<conf.A_pole_min ||
-				end>conf.A_pole_max || end < conf.A_pole_min;
+			return start.AsRad() > conf.A_pole_max.AsRad() || start.AsRad() < conf.A_pole_min.AsRad() ||
+				end.AsRad() > conf.A_pole_max.AsRad() || end.AsRad() < conf.A_pole_min.AsRad();
 		}
-		bool CIsMoveOverPole(double start, double end)
+		bool CIsMoveOverPole(TAngle start, TAngle end)
 			//перемещение вокруг оси C идет через полюс
 			//start,end - перемещение в виде линейных координат (с учетом скручиваний и раскручиваний)
 		{
-			bool isvalid = start > conf.C_pole_max || start<conf.C_pole_min ||
-				end>conf.C_pole_max || end < conf.C_pole_min;
+			bool isvalid = start.AsRad() > conf.C_pole_max.AsRad() || start.AsRad() < conf.C_pole_min.AsRad() ||
+				end.AsRad() > conf.C_pole_max.AsRad() || end.AsRad() < conf.C_pole_min.AsRad();
 			return isvalid;
 		}
 
 		//result - направление наикратчайшего перемещения из a0 в a1
 			//dist - величина и знак перемещения (+ это CCW)
-		bool IsCCWMove(double a0, double a1, double& dist);
+		bool IsCCWMove(TAngle a0, TAngle a1, TAngle& dist);
 
 		//result - стоимость перемещения по наикратчайшему пути из v0 в v1
 		double MovementCost(TKinematics v0, TKinematics v1);
@@ -156,7 +198,7 @@ namespace CLSFProcessor
 		double GetInterpolationTolerance(TKinematics p0, TKinematics p1, TToolOrientation &middle_tool);
 
 		//delta_A,delta_C - приращения необходимые для перемещения из кинематики 0 в кинематику 1
-		void GetMovement(TKinematics p0, TKinematics p1, double& delta_A, double& delta_C);
+		void GetMovement(TKinematics p0, TKinematics p1, TAngle& delta_A, TAngle& delta_C);
 		void Clear(std::vector<TPipelineElement> &pipe);
 
 		void CalcKinematics(std::vector<TPipelineElement> &pipe);

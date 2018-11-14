@@ -33,32 +33,32 @@ Eigen::Vector3d TUniversal5axis::InverseLinearNode(Eigen::Vector3d machine_p, Ei
 	return machine_p - axis * value;
 }
 
-Eigen::Vector3d TUniversal5axis::ForwardRotateNode(Eigen::Vector3d p, Eigen::Vector3d off, Eigen::Vector3d axis, double angle)
+Eigen::Vector3d TUniversal5axis::ForwardRotateNode(Eigen::Vector3d p, Eigen::Vector3d off, Eigen::Vector3d axis, TAngle angle)
 {
-	Eigen::AngleAxis<double> aa(angle, axis);
+	Eigen::AngleAxis<double> aa(angle.AsRad(), axis);
 	return aa * (p - off) + off;
 }
-Eigen::Vector3d TUniversal5axis::InverseRotateNode(Eigen::Vector3d machine_p, Eigen::Vector3d off, Eigen::Vector3d axis, double angle)
+Eigen::Vector3d TUniversal5axis::InverseRotateNode(Eigen::Vector3d machine_p, Eigen::Vector3d off, Eigen::Vector3d axis, TAngle angle)
 {
-	Eigen::AngleAxis<double> aa(-angle, axis);
+	Eigen::AngleAxis<double> aa(-angle.AsRad(), axis);
 	return aa * (machine_p - off) + off;
 }
 
-Eigen::Vector3d TUniversal5axis::ForwardRotateNode(Eigen::Vector3d dir, Eigen::Vector3d axis, double angle)
+Eigen::Vector3d TUniversal5axis::ForwardRotateNode(Eigen::Vector3d dir, Eigen::Vector3d axis, TAngle angle)
 {
-	Eigen::AngleAxis<double> aa(angle, axis);
+	Eigen::AngleAxis<double> aa(angle.AsRad(), axis);
 	return aa * dir;
 }
-Eigen::Vector3d TUniversal5axis::InverseRotateNode(Eigen::Vector3d machine_dir, Eigen::Vector3d axis, double angle)
+Eigen::Vector3d TUniversal5axis::InverseRotateNode(Eigen::Vector3d machine_dir, Eigen::Vector3d axis, TAngle angle)
 {
-	Eigen::AngleAxis<double> aa(-angle, axis);
+	Eigen::AngleAxis<double> aa(-angle.AsRad(), axis);
 	return aa * machine_dir;
 }
 
 //a0,a1 - углы на которые надо повернуть вектор p вокруг оси curr чтобы он полностью оказался в плоскости перпенидкулярной next
 //result - false если такого поворота не существует
 //any_rotation - вектор curr лежит в плоскости перпенд. next и совпадает с вектором curr
-bool TUniversal5axis::GetRotationToNextPlane(Eigen::Vector3d curr, Eigen::Vector3d next, Eigen::Vector3d p, double rotations[], bool &any_rotation)
+bool TUniversal5axis::GetRotationToNextPlane(Eigen::Vector3d curr, Eigen::Vector3d next, Eigen::Vector3d p, TRotations& rotations, bool &any_rotation)
 {
 	//TODO надо математическки провверить а то что-то не сходится
 	Eigen::Vector3d _z = curr;
@@ -80,8 +80,8 @@ bool TUniversal5axis::GetRotationToNextPlane(Eigen::Vector3d curr, Eigen::Vector
 	if (!any_rotation)
 	{
 		double betta = acos((curr.dot(next) > 0 ? -1 : 1)*gamma / cone_angle);
-		rotations[0] = betta - alpha;
-		rotations[1] = 2 * M_PI - betta - alpha;
+		rotations.v[0] = TAngle(betta - alpha);
+		rotations.v[1] = TAngle(2 * M_PI - betta - alpha);
 	}
 }
 
@@ -99,7 +99,7 @@ double TUniversal5axis::AngleBetweenVectors(Eigen::Vector3d axis, Eigen::Vector3
 
 //вектор направления инструмента в системе координат детали для заданных машинных угловых координат
 //направлен от фланца к концу инструмента
-Eigen::Vector3d TUniversal5axis::GetToolDirFromMachineToolKinematics(double* coords)
+Eigen::Vector3d TUniversal5axis::GetToolDirFromMachineToolKinematics(TKinematics& coords)
 {
 	Eigen::Vector3d p(conf.mach_tool_dir);
 	//
@@ -108,12 +108,12 @@ Eigen::Vector3d TUniversal5axis::GetToolDirFromMachineToolKinematics(double* coo
 		if (conf.nodes[i].is_part_node)
 		{
 			if (!conf.nodes[i].is_linear)
-				p = InverseRotateNode(p, conf.nodes[i].axis, coords[i]);
+				p = InverseRotateNode(p, conf.nodes[i].axis, TAngle(coords.v[i]));
 		}
 		else
 		{
 			if (!conf.nodes[i].is_linear)
-				p = ForwardRotateNode(p, conf.nodes[i].axis, coords[i]);
+				p = ForwardRotateNode(p, conf.nodes[i].axis, TAngle(coords.v[i]));
 		}
 	}
 	//
@@ -122,7 +122,7 @@ Eigen::Vector3d TUniversal5axis::GetToolDirFromMachineToolKinematics(double* coo
 	return p;
 }
 
-Eigen::Vector3d TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, double* coord)
+Eigen::Vector3d TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, TKinematics& coord)
 {
 	Eigen::Vector3d tool_dir = GetToolDirFromMachineToolKinematics(coord);
 	//TODO починить везде
@@ -151,7 +151,7 @@ Eigen::Vector3d TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_po
 			else
 			{
 				p -= conf.nodes[i].offset;
-				p = InverseRotateNode(p, conf.nodes[i].axis, coord[i]);
+				p = InverseRotateNode(p, conf.nodes[i].axis, TAngle(coord.v[i]));
 			}
 		}
 		else
@@ -163,7 +163,7 @@ Eigen::Vector3d TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_po
 			else
 			{
 				p += conf.nodes[i].offset;
-				p = ForwardRotateNode(p, conf.nodes[i].axis, coord[i]);
+				p = ForwardRotateNode(p, conf.nodes[i].axis, TAngle(coord.v[i]));
 			}
 		}
 	}
@@ -175,9 +175,9 @@ Eigen::Vector3d TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_po
 			if (rotation_node_id[k] < i)
 			{
 				if (conf.nodes[rotation_node_id[k]].is_part_node)
-					lin_axis_rotated[i] = InverseRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, coord[i]);
+					lin_axis_rotated[i] = InverseRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, TAngle(coord.v[i]));
 				else
-					lin_axis_rotated[i] = ForwardRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, coord[i]);
+					lin_axis_rotated[i] = ForwardRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, TAngle(coord.v[i]));
 			}
 	}
 	Eigen::Matrix3d m;
@@ -204,21 +204,21 @@ void TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::V
 	tool_pos = conf.part_system * tool_pos - tool_dir * tool_length;
 	//получаем 2 варианта положений поворотных осей
 
-	double c[2] = { 0,0 };
+	TRotations c;
 	GetRotationToNextPlane(conf.nodes[rotation_node_id[0]].axis, conf.nodes[rotation_node_id[1]].axis, tool_dir, c, result.has_undet_coord);
 
 	Eigen::Vector3d _tool_dir[2];
 	for (int i = 0; i < 2; i++)
 	{
-		Eigen::AngleAxis<double> aa(c[i], conf.nodes[rotation_node_id[0]].axis);
+		Eigen::AngleAxis<double> aa(c.v[i].AsRad(), conf.nodes[rotation_node_id[0]].axis);
 		_tool_dir[i] = aa * tool_dir;
 	}
 
 	//если поворотное звено находится в ветви инструмента то его надо будет поворачивать в противоположную сторону
 	if (!conf.nodes[rotation_node_id[0]].is_part_node)
 	{
-		c[0] = -c[0];
-		c[1] = -c[1];
+		c.v[0] = TAngle(-(c.v[0].AsRad()));
+		c.v[1] = TAngle(-(c.v[1].AsRad()));
 	}
 
 	double b[2] = { 0,0 };
@@ -247,7 +247,7 @@ void TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::V
 				else
 				{
 					p -= conf.nodes[i].offset;
-					p = InverseRotateNode(p, conf.nodes[i].axis, (rotation_node_id[0] == i) ? c[v] : b[v]);
+					p = InverseRotateNode(p, conf.nodes[i].axis, (rotation_node_id[0] == i) ? c.v[v] : TAngle(b[v]));
 				}
 			}
 			else
@@ -259,7 +259,7 @@ void TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::V
 				else
 				{
 					p += conf.nodes[i].offset;
-					p = ForwardRotateNode(p, conf.nodes[i].axis, (rotation_node_id[0] == i) ? c[v] : b[v]);
+					p = ForwardRotateNode(p, conf.nodes[i].axis, (rotation_node_id[0] == i) ? c.v[v] : TAngle(b[v]));
 				}
 			}
 		}
@@ -271,9 +271,9 @@ void TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::V
 				if (rotation_node_id[k] < i)
 				{
 					if (conf.nodes[rotation_node_id[k]].is_part_node)
-						lin_axis_rotated[i] = InverseRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, k == 0 ? c[v] : b[v]);
+						lin_axis_rotated[i] = InverseRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, k == 0 ? c.v[v] : TAngle(b[v]));
 					else
-						lin_axis_rotated[i] = ForwardRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, k == 0 ? c[v] : b[v]);
+						lin_axis_rotated[i] = ForwardRotateNode(lin_axis_rotated[i], conf.nodes[rotation_node_id[k]].axis, k == 0 ? c.v[v] : TAngle(b[v]));
 				}
 		}
 
@@ -289,12 +289,12 @@ void TUniversal5axis::ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::V
 
 
 		Eigen::Vector3d pos = m * (tool_pos - p);
-		result.variant[v][linear_node_id[0]] = pos[0];
-		result.variant[v][linear_node_id[0]] = pos[1];
-		result.variant[v][linear_node_id[0]] = pos[2];
+		result.variant[v].v[linear_node_id[0]] = pos[0];
+		result.variant[v].v[linear_node_id[0]] = pos[1];
+		result.variant[v].v[linear_node_id[0]] = pos[2];
 
-		result.variant[v][rotation_node_id[0]] = c[v];
-		result.variant[v][rotation_node_id[1]] = b[v];
+		result.variant[v].v[rotation_node_id[0]] = c.v[v].AsRad();
+		result.variant[v].v[rotation_node_id[1]] = b[v];
 	}
 }
 
@@ -310,12 +310,12 @@ void TUniversal5axis::FromMachineToolKinematics(TKinematics source,
 			if (conf.nodes[i].is_linear)
 			{
 				p -= conf.nodes[i].offset;
-				p = InverseLinearNode(p, conf.nodes[i].axis, source[i]);
+				p = InverseLinearNode(p, conf.nodes[i].axis, source.v[i]);
 			}
 			else
 			{
 				p -= conf.nodes[i].offset;
-				p = InverseRotateNode(p, conf.nodes[i].axis_offset, conf.nodes[i].axis, source[i]);
+				p = InverseRotateNode(p, conf.nodes[i].axis_offset, conf.nodes[i].axis, TAngle(source.v[i]));
 			}
 		}
 		else
@@ -323,12 +323,12 @@ void TUniversal5axis::FromMachineToolKinematics(TKinematics source,
 			if (conf.nodes[i].is_linear)
 			{
 				p += conf.nodes[i].offset;
-				p = ForwardLinearNode(p, conf.nodes[i].axis, source[i]);
+				p = ForwardLinearNode(p, conf.nodes[i].axis, source.v[i]);
 			}
 			else
 			{
 				p += conf.nodes[i].offset;
-				p = ForwardRotateNode(p, conf.nodes[i].axis_offset, conf.nodes[i].axis, source[i]);
+				p = ForwardRotateNode(p, conf.nodes[i].axis_offset, conf.nodes[i].axis, TAngle(source.v[i]));
 			}
 		}
 	}
