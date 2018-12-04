@@ -4,30 +4,37 @@
 
 #include "commonConf.h"
 
+#include <array>
+
 namespace CLSFProcessor
 {
 	struct TKinematics
 	{
 		//5 координат, соответсвующих звеньям станка (2 поворотных и 3 линейных в любой комбинации)
-		double v[5];
+		std::array<double,5> v;
 	};
 
 	struct TKinematicsPair
 	{
-		TKinematics variant[2];//варианты кинематики станка
+		std::array<TKinematics,2> variant;//варианты кинематики станка
 		bool has_undet_coord;//ось А вертикальна -> значение C может быть любое
 		int undet_coord_id;
 	};
 
+	struct TNodesIndex
+	{
+		std::array<int,3> linear_node; //индексы линейных звеньев
+		std::array<int,2> rot_node; //индексы поворотных звеньев
+	};
 	
 
-	double AngleBetween(Eigen::Vector3d v0, Eigen::Vector3d v1);
+	TAngle AngleBetween(Eigen::Vector3d v0, Eigen::Vector3d v1);
 
-	double AngleFromDir(const Eigen::Vector2d& v);
+	TAngle AngleFromDir(const Eigen::Vector2d& v);
 
 	struct TRotations
 	{
-		TAngle v[2];
+		std::array<TAngle,2> v;
 	};
 
 	class TUniversal5axis
@@ -35,6 +42,7 @@ namespace CLSFProcessor
 	private:
 		CLSFProcessor::Conf::TFiveAxis conf;
 		double tool_length;
+		TNodesIndex ids;
 	public:
 		TUniversal5axis(CLSFProcessor::Conf::TFiveAxis use_conf, double use_tool_length = 0);
 		void SetToolLength(double use_tool_length);
@@ -54,8 +62,8 @@ namespace CLSFProcessor
 
 		//вектор направления инструмента в системе координат детали для заданных машинных угловых координат
 		//направлен от фланца к концу инструмента
-		Eigen::Vector3d GetToolDirFromMachineToolKinematics(TKinematics& coords);
-		Eigen::Vector3d ToMachineToolKinematics(Eigen::Vector3d tool_pos, TKinematics& coord);
+		Eigen::Vector3d GetToolDirFromMachineToolKinematics(TKinematics coords);
+		Eigen::Vector3d ToMachineToolKinematics(Eigen::Vector3d tool_pos, TKinematics coord);
 
 		//use_fixed_C - используется для определения any_C, на выходе конкретная кинематика для данного fixed_C (должен быть от 0 до pi)
 		void ToMachineToolKinematics(Eigen::Vector3d tool_pos, Eigen::Vector3d tool_dir,
@@ -64,5 +72,7 @@ namespace CLSFProcessor
 
 		void FromMachineToolKinematics(TKinematics source,
 			Eigen::Vector3d &tool_pos, Eigen::Vector3d &tool_dir);
+
+		TNodesIndex GetNodesIndex();
 	};
 }

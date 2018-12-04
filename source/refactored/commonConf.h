@@ -88,7 +88,7 @@ namespace CLSFProcessor
 
 			double any_C_epsilon;
 			double ortho_vec_epsilon;
-			//double inverse_kinemtatics_tol;
+			double inverse_kinemtatics_tol;
 
 			bool remove_F_repeat;
 			int any_C_criteria;

@@ -122,42 +122,22 @@ namespace CLSFProcessor
 		CLSFProcessor::Conf::TProcessor processor_conf;
 
 		double min_tol;
-		double max_tol;
-
-		int linear_node[3]; //индексы линейных звеньев
-		int rot_node[2]; //индексы поворотных звеньев
+		double max_tol;		
 
 		TUniversal5axis machine;
+
+		TNodesIndex ids;
 
 	public:		
 
 		TATPProcessor(Conf::TCommon common_conf, Conf::TFiveAxis five_axis_conf, Conf::TProcessor processor_conf)
-			:machine(five_axis_conf)
+			:machine(five_axis_conf, common_conf.tool_length)
 		{
-			this->conf = conf;
+			this->conf = common_conf;
 			this->five_axis_conf = five_axis_conf;
 			this->processor_conf = processor_conf;
 
-			int curr_linear = 0, curr_rot = 0;
-
-			for (int i = 0; i < five_axis_conf.nodes.size(); i++)
-			{
-				auto& node = five_axis_conf.nodes[i];
-				if (node.is_linear)
-				{
-					linear_node[curr_linear] = i;
-					curr_linear++;
-					if (curr_linear > 2)
-						throw std::exception("неверная конфигурация");
-				}
-				else if (!node.is_linear)
-				{
-					rot_node[curr_rot] = i;
-					curr_rot++;
-					if (curr_rot > 1)
-						throw std::exception("неверная конфигурация");
-				}
-			}
+			this->ids = machine.GetNodesIndex();
 		}
 
 		bool AIsInPole(TAngle A)
@@ -212,6 +192,8 @@ namespace CLSFProcessor
 
 		void SwapVariants(std::vector<TPipelineElement> &pipe);
 
+		void CheckError(TKinematics kinematics, Eigen::Vector3d pos, Eigen::Vector3d dir, double& tol0, double& tol1);
+
 		void GetCWithMaxX(Eigen::Vector3d tool_pos, double A, double initial_C, double& result_C, Eigen::Vector3d& result_pos);
 		void DetermineAnyCKinematics(std::vector<TPipelineElement> &pipe);
 		void TraceLine(std::vector<TPipelineElement> &pipe, int line);
@@ -233,9 +215,6 @@ namespace CLSFProcessor
 		void ValidateKinematicsInverseAlgorithm(std::vector<TPipelineElement> &pipe);
 		void MakePipe(std::vector<TPipelineElement> &pipe, std::vector<TCLSFToken> &atp_tokens);
 		void PassThrough(std::vector<TCLSFToken> &atp_tokens, std::vector<TToolMovementElement> &result_pipe, double &fast_movement_time, double &work_movement_time);
-
-		//только для standalone постов, далее убрать
-		void GetCode(std::vector<TToolMovementElement> &pipe, std::string &result_code, const char* ext_header, const char* prog_id);
 
 	};
 }

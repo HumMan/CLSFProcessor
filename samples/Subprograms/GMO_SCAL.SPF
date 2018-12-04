@@ -1,8 +1,0 @@
-proc  GMO_SCAL(var real vec0[3],var real vec1[3],var real scal_mul)
-def int axis_id
-scal_mul=0
-for axis_id=0 to 2 
-scal_mul=scal_mul+vec0[axis_id]*vec1[axis_id]
-endfor
-ret
-

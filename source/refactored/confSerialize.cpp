@@ -36,7 +36,7 @@ void ParseCommon(pugi::xml_node& ini_params, Conf::TCommon& conf)
 
 	conf.A_pole_min = TAngle::FromDeg(ini_params.child("A_pole_min").attribute("value").as_double());
 	conf.A_pole_max = TAngle::FromDeg(ini_params.child("A_pole_max").attribute("value").as_double());
-	//inverse_kinemtatics_tol=0.001;//максимально допустимое различие между прямой и обратной функцией кинематики
+	conf.inverse_kinemtatics_tol= ini_params.child("inverse_kinemtatics_tol").attribute("value").as_double();
 
 	conf.remove_F_repeat = ini_params.child("remove_F_repeat").attribute("value").as_bool();
 

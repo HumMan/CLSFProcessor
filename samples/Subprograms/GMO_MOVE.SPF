@@ -1,4 +1,0 @@
-PROC GMO_MOVE(var real target_pos[3],real feed)
-g01f=feed x=target_pos[0] y=target_pos[1] z=target_pos[2]
-RET
-

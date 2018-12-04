@@ -21,6 +21,8 @@
 	<C_pole_max value="+20000000.0" />
 	<A_pole_min value="-900.00001" />
 	<A_pole_max value="900.000001" />
+	<!-- максимально допустимое различие между прямой и обратной функцией кинематики -->
+	<inverse_kinemtatics_tol value="0.001" />
 	<remove_F_repeat value="1" />
 	<any_C_criteria value="0" />
 	 <!--
