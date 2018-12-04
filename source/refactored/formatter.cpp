@@ -1,251 +1,224 @@
 ﻿#include "formatter.h"
 
+
+#include <fstream>
+#include <iostream>
+
 using namespace CLSFProcessor;
 
-void CLSFProcessor::GetGCode(std::vector<TToolMovementElement> &pipe, std::string& result_code)
+struct State
 {
-	result_code = "";
-	if (pipe.size() == 0)
-		return;
-	char* buff = new char[10000000];//TODO сюда записывается текст из auxfun котоорый может быть очень болььшим
 	double curr_feed = 0/*pipe[0].feed*/;
 	int curr_cutcom = 0;
 	std::string curr_path_name;
-	double curr_spndl_rpm = pipe[0].state.spndl_rpm;
-	bool curr_clw = pipe[0].state.clw;
-	//if(curr_feed==0)curr_feed=1500;//TODO
+	double curr_spndl_rpm;
+	bool curr_clw;
+
 	int frame_number = 1;
-
-	bool oriented_from_goto_engage_done = false;
-
-	double curr_coord[5];//текущие координаты
-	double curr_coord_machine[5];//текущие координаты с учетом округления(используется при инкрементном режиме для устранения накапливающейся ошбки округления)
+	//текущие координаты
+	double curr_coord[5];
+	//текущие координаты с учетом округления(используется при инкрементном режиме для устранения накапливающейся ошбки округления)
+	double curr_coord_machine[5];
 	bool need_print[5] = { 0,0,0,0,0 };
 
-	//double* new_coord = &pipe[0].kinematics.v[0];
-	//for (int c = 0; c < 5; c++)
-	//{
-	//	curr_coord[c] = new_coord[c] + 2 * gcode_axis_prop[c].repeat_tol;
-	//	curr_coord_machine[c] =
-	//		gcode_axis_prop[c].rad_to_deg
-	//		? new_coord[c]
-	//		: new_coord[c];
-	//}
+	std::array<double, 5> new_coord;
+};
 
-	//for (int i = 0; i < pipe.size(); i++)
-	//{
-	//	new_coord = &pipe[i].pos[0];
-	//	//switch(pipe[i].mask)
-	//	{
-	//		//case PrimitiveMask::LINE:
-	//		//	{
-	//		bool is_path_begin = (curr_path_name != pipe[i].state.path_name&&pipe[i].state.path_name != "");
-	//		if (is_path_begin)
-	//		{
-	//			oriented_from_goto_engage_done = false;
-	//			oriented_from_goto_engage_done = false;
-	//		}
+std::string ProcessLine(State& state, bool is_first, CLSFProcessor::TToolMovementElement& element, CLSFProcessor::Conf::TCommon conf, CLSFProcessor::Conf::TProcessor processor_conf)
+{
+	char* buff = new char[1000];
 
-	//		curr_path_name = pipe[i].state.path_name;
+	std::string result_code("");
+
+	state.new_coord = element.kinematics.v;
+	//switch(element.mask)
+	{
+		//case PrimitiveMask::LINE:
+		//	{
+		bool is_path_begin = (state.curr_path_name != element.state.path_name&&element.state.path_name != "");
+
+		state.curr_path_name = element.state.path_name;
 
 
-	//		if (!pipe[i].state.rapid&&pipe[i].state.feed != curr_feed)
-	//		{
-	//			//sprintf(buff,"N%i G01 F%i\n",frame_number+=10,(int)pipe[i].feed);
-	//			//result_code+=buff;
-	//		}
+		if (!element.state.rapid&&element.state.feed != state.curr_feed)
+		{
+			//sprintf(buff,"N%i G01 F%i\n",frame_number+=10,(int)element.feed);
+			//result_code+=buff;
+		}
 
-	//		if ((1/*coord_repeat_tol*/ < abs(pipe[i].state.spndl_rpm - curr_spndl_rpm) || curr_clw != pipe[i].state.clw || i == 0))
-	//		{
-	//			if (abs(curr_spndl_rpm - 0) < 0.001 || i == 0)
-	//				sprintf(buff, "M3S%i\n",/*pipe[i].clw?3:4,*/int(pipe[i].state.spndl_rpm));
-	//			else if (abs(pipe[i].state.spndl_rpm - 0) < 0.001)
-	//				sprintf(buff, "M5\n");
-	//			else sprintf(buff, "");
-	//			result_code += buff;
-	//			curr_spndl_rpm = pipe[i].state.spndl_rpm;
-	//			curr_clw = pipe[i].state.clw;
-	//		}
+		if ((1/*coord_repeat_tol*/ < abs(element.state.spndl_rpm - state.curr_spndl_rpm) || state.curr_clw != element.state.clw || is_first))
+		{
+			if (abs(state.curr_spndl_rpm - 0) < 0.001 || is_first)
+				sprintf(buff, "M3S%i\n",/*element.clw?3:4,*/int(element.state.spndl_rpm));
+			else if (abs(element.state.spndl_rpm - 0) < 0.001)
+				sprintf(buff, "M5\n");
+			else sprintf(buff, "");
+			result_code += buff;
+			state.curr_spndl_rpm = element.state.spndl_rpm;
+			state.curr_clw = element.state.clw;
+		}
 
-	//		bool force_rapid_change = false;
-	//		for (int c = 0; c < 5; c++)
-	//		{
-	//			bool last_need_print = need_print[c];
-	//			double tol = gcode_axis_prop[c].rad_to_deg ? DegToRad(gcode_axis_prop[c].repeat_tol) : gcode_axis_prop[c].repeat_tol;
-	//			need_print[c] =
-	//				tol <= abs(new_coord[c] - curr_coord[c]) || !gcode_axis_prop[c].remove_repeat;
-	//			if (need_print[c] && gcode_axis_prop[c].force_rapid_change)
-	//				force_rapid_change = true;
-	//			//если имеется функция разблокировки/блокировки оси то включаем ее
-	//			if (!last_need_print&&need_print[c] && gcode_axis_prop[c].lock_header != "")
-	//			{
-	//				result_code += gcode_axis_prop[c].lock_header;
-	//			}
-	//			if (last_need_print && !need_print[c] && gcode_axis_prop[c].lock_header != "")
-	//			{
-	//				result_code += gcode_axis_prop[c].lock_footer;
-	//			}
-	//		}
+		bool force_rapid_change = false;
+		for (int c = 0; c < 5; c++)
+		{
+			bool last_need_print = state.need_print[c];
+			double tol = conf.gcode_axis_prop[c].rad_to_deg ? TAngle::FromDeg(conf.gcode_axis_prop[c].repeat_tol).AsRad() : conf.gcode_axis_prop[c].repeat_tol;
+			state.need_print[c] =
+				tol <= abs(state.new_coord[c] - state.curr_coord[c]) || !conf.gcode_axis_prop[c].remove_repeat;
+			if (state.need_print[c] && conf.gcode_axis_prop[c].force_rapid_change)
+				force_rapid_change = true;
+			//если имеется функция разблокировки/блокировки оси то включаем ее
+			if (!last_need_print&&state.need_print[c] && conf.gcode_axis_prop[c].lock_header != "")
+			{
+				result_code += conf.gcode_axis_prop[c].lock_header;
+			}
+			if (last_need_print && !state.need_print[c] && conf.gcode_axis_prop[c].lock_header != "")
+			{
+				result_code += conf.gcode_axis_prop[c].lock_footer;
+			}
+		}
 
-	//		sprintf(buff, "%s", pipe[i].state.auxfun.c_str());
-	//		result_code += buff;
-	//		//если направление инструмента 0,0,-1 то надо сменить коррекцию на противоположную
-	//		if (pipe[i].tool_orient.dir.Distance(TVec<double, 3>(0, 0, -1)) < 0.0001)
-	//		{
-	//			if (pipe[i].state.cutcom == 1)pipe[i].state.cutcom = 2;
-	//			if (pipe[i].state.cutcom == 2)pipe[i].state.cutcom = 1;
-	//		}
-	//		if (pipe[i].state.cutcom != curr_cutcom)
-	//		{
-	//			sprintf(buff, "G%i", 40 + pipe[i].state.cutcom);
-	//			result_code += buff;
-	//			curr_cutcom = pipe[i].state.cutcom;
-	//		}
-	//		//плоскость круговой/спиральной интерполяции
-	//		if (pipe[i].state.mask == PrimitiveMask::CIRCLE)
-	//		{
-	//			int rot_axis;
-	//			bool positive;
-	//			IsOrthogonalVector(pipe[i].state.normal, rot_axis, positive);
-	//			int rot_axis_to_plane[3] = { 19,18,17 };
-	//			sprintf(buff, "G%i", rot_axis_to_plane[rot_axis]);
-	//			result_code += buff;
-	//		}
+		sprintf(buff, "%s", element.state.auxfun.c_str());
+		result_code += buff;
+		//если направление инструмента 0,0,-1 то надо сменить коррекцию на противоположную
+		if ((element.tool_orient.dir - (Eigen::Vector3d(0, 0, -1))).norm() < 0.0001)
+		{
+			if (element.state.cutcom == 1)element.state.cutcom = 2;
+			if (element.state.cutcom == 2)element.state.cutcom = 1;
+		}
+		if (element.state.cutcom != state.curr_cutcom)
+		{
+			sprintf(buff, "G%i", 40 + element.state.cutcom);
+			result_code += buff;
+			state.curr_cutcom = element.state.cutcom;
+		}
+		//плоскость круговой/спиральной интерполяции
+		//if (element.state.mask == PrimitiveMask::CIRCLE)
+		//{
+		//	int rot_axis;
+		//	bool positive;
+		//	IsOrthogonalVector(element.state.normal, rot_axis, positive);
+		//	int rot_axis_to_plane[3] = { 19,18,17 };
+		//	sprintf(buff, "G%i", rot_axis_to_plane[rot_axis]);
+		//	result_code += buff;
+		//}
 
-	//		{
-	//			int g_move_mode = -1;
-	//			if (pipe[i].state.mask == PrimitiveMask::CIRCLE)
-	//			{
-	//				g_move_mode = (pipe[i].state.normal*TVec<double, 3>(1, 1, 1).GetNormalized() > 0) ? 2 : 3;
-	//			}
-	//			else
-	//			{
-	//				g_move_mode = (pipe[i].state.rapid || force_rapid_change) ? 0 : 1;
-	//			}
-	//			sprintf(buff,/*"N%i"*/"G0%i "/*,frame_number+=10*/, g_move_mode);
-	//			result_code += buff;
-	//		}
+		{
+			int g_move_mode = -1;
+			if (element.state.mask == PrimitiveMask::CIRCLE)
+			{
+				g_move_mode = (element.state.normal.dot(Eigen::Vector3d(1, 1, 1).normalized()) > 0) ? 2 : 3;
+			}
+			else
+			{
+				g_move_mode = (element.state.rapid || force_rapid_change) ? 0 : 1;
+			}
+			sprintf(buff,/*"N%i"*/"G0%i "/*,frame_number+=10*/, g_move_mode);
+			result_code += buff;
+		}
 
-	//		//TODO ВАЖНООООО!!!! в настройках ини файла неправильно трактуются X_id=0
-	//		//Y_id=1
-	//		//Z_id=2
-	//		//A_id=4
-	//		//C_id=3
-	//		// почему-то перепутываются оси при измененном порядке
+		for (int c = 0; c < 5; c++)
+		{
+			if (state.need_print[c])
+			{
+				double new_coord_val =
+					conf.gcode_axis_prop[c].rad_to_deg
+					? TAngle::FromRad(state.new_coord[c]).AsDeg()
+					: state.new_coord[c];
 
-	//		for (int c = 0; c < 5; c++)
-	//		{
-	//			if (need_print[c])
-	//			{
-	//				double new_coord_val =
-	//					gcode_axis_prop[c].rad_to_deg
-	//					? RadToDeg(new_coord[c])
-	//					: new_coord[c];
+				if (conf.gcode_axis_prop[c].is_increment)
+				{
+					double inc_val = new_coord_val - state.curr_coord_machine[c];
+					sprintf(buff, conf.gcode_axis_prop[c].format.c_str(), inc_val);
+					inc_val = floor(inc_val / conf.gcode_axis_prop[c].repeat_tol + 0.5)*conf.gcode_axis_prop[c].repeat_tol;
 
-	//				if (gcode_axis_prop[c].is_increment)
-	//				{
-	//					double inc_val = new_coord_val - curr_coord_machine[c];
-	//					sprintf(buff, gcode_axis_prop[c].format.c_str(), inc_val);//TODO из-за округления будет накапливаться ошибка DONE
-	//					inc_val = floor(inc_val / gcode_axis_prop[c].repeat_tol + 0.5)*gcode_axis_prop[c].repeat_tol;
+					state.curr_coord_machine[c] += inc_val;
+				}
+				else
+					sprintf(buff, conf.gcode_axis_prop[c].format.c_str(), new_coord_val);
+				result_code += buff;
+				state.curr_coord[c] = state.new_coord[c];
+			}
+		}
+		//if (element.state.mask == PrimitiveMask::CIRCLE)
+		//{
+		//	TVec<double, 3> center = element.state.center;
+		//	TVec<double, 3> machine_center = ToMachineToolKinematics(center, element.A, element.C);
+		//	TVec<double, 3> machine_last_pos = ToMachineToolKinematics(element.pos, element.A, element.C);
 
-	//					curr_coord_machine[c] += inc_val;
-	//				}
-	//				else
-	//					sprintf(buff, gcode_axis_prop[c].format.c_str(), new_coord_val);
-	//				result_code += buff;
-	//				curr_coord[c] = new_coord[c];
-	//			}
-	//		}
-	//		if (pipe[i].state.mask == PrimitiveMask::CIRCLE)
-	//		{
-	//			TVec<double, 3> center = pipe[i].state.center;
-	//			TVec<double, 3> machine_center = ToMachineToolKinematics(center, pipe[i].A, pipe[i].C);
-	//			TVec<double, 3> machine_last_pos = ToMachineToolKinematics(pipe[i].pos, pipe[i].A, pipe[i].C);
+		//	int rot_axis;
+		//	bool positive;
+		//	IsOrthogonalVector(element.state.normal, rot_axis, positive);
 
-	//			int rot_axis;
-	//			bool positive;
-	//			IsOrthogonalVector(pipe[i].state.normal, rot_axis, positive);
+		//	//печатаем координаты центра кроме координаты оси вращения
+		//	for (int a = 0; a < 3; a++)
+		//	{
+		//		if (circle_interpolation_center_absol)
+		//		{
+		//			char* r[] = {
+		//				"I=AC(%f)","J=AC(%f)","K=AC(%f)"
+		//			};
+		//			if (rot_axis != a)
+		//			{
+		//				sprintf(buff, r[a], machine_center[a]);
+		//				result_code += buff;
+		//			}
+		//		}
+		//		else
+		//		{
+		//			char* r[] = {
+		//				"I%f","J%f","K%f"
+		//			};
+		//			if (rot_axis != a)
+		//			{
+		//				sprintf(buff, r[a], machine_center[a] - machine_last_pos[a]);
+		//				result_code += buff;
+		//			}
+		//		}
+		//	}
 
-	//			//печатаем координаты центра кроме координаты оси вращения
-	//			for (int a = 0; a < 3; a++)
-	//			{
-	//				if (circle_interpolation_center_absol)
-	//				{
-	//					char* r[] = {
-	//						"I=AC(%f)","J=AC(%f)","K=AC(%f)"
-	//					};
-	//					if (rot_axis != a)
-	//					{
-	//						sprintf(buff, r[a], machine_center[a]);
-	//						result_code += buff;
-	//					}
-	//				}
-	//				else
-	//				{
-	//					char* r[] = {
-	//						"I%f","J%f","K%f"
-	//					};
-	//					if (rot_axis != a)
-	//					{
-	//						sprintf(buff, r[a], machine_center[a] - machine_last_pos[a]);
-	//						result_code += buff;
-	//					}
-	//				}
-	//			}
+		//	if (element.state.spiral_times > 0)
+		//	{
+		//		sprintf(buff, " TURN=%i ", element.state.spiral_times);
+		//		result_code += buff;
+		//	}
+		//}
 
-	//			if (pipe[i].state.spiral_times > 0)
-	//			{
-	//				sprintf(buff, " TURN=%i ", pipe[i].state.spiral_times);
-	//				result_code += buff;
-	//			}
-	//		}
+		if (1/*coord_repeat_tol*/ < abs(element.contour_correct_feed - state.curr_feed) || !conf.remove_F_repeat)
+		{
+			if (!element.state.rapid)
+			{
+				sprintf(buff, "F%i", element.state.rapid ? (int)processor_conf.rapid_feed : (int)element.contour_correct_feed);
+				result_code += buff;
+				state.curr_feed = element.state.feed;
+			}
+		}
 
-	//		if (1/*coord_repeat_tol*/ < abs(pipe[i].contour_correct_feed - curr_feed) || !remove_F_repeat)
-	//		{
-	//			if (!pipe[i].state.rapid)
-	//			{
-	//				sprintf(buff, "F%i", pipe[i].state.rapid ? (int)rapid_feed : (int)pipe[i].contour_correct_feed);
-	//				result_code += buff;
-	//				curr_feed = pipe[i].state.feed;
-	//			}
-	//		}
+		result_code += "\n";
 
-	//		result_code += "\n";
+		//}break;
+	//case PrimitiveMask::CIRCLE:
+		/*{
+			TVec<double,3> prev_pos=pipe[i-1].pos,
+				next_pos=element.pos,
+				center;
+			if(circle_interpolation_center_absol)
+				center=prev_pos+element.center-pipe[i-1].tool_orient.pos;
+			else
+				center=element.center-pipe[i-1].tool_orient.pos;
+			sprintf(buff,"%sN%i G0%i X%.3f Y%.3f Z%.3f I%.3f J%.3f\n",
+				element.auxfun.c_str(),
+				frame_number+=10,
+				element.normal[2]<0?3:2,
+					next_pos[0],next_pos[1],next_pos[2],
+					center[0],center[1],center[2]);
+				result_code+=buff;
 
-	//		//}break;
-	//	//case PrimitiveMask::CIRCLE:
-	//		/*{
-	//			TVec<double,3> prev_pos=pipe[i-1].pos,
-	//				next_pos=pipe[i].pos,
-	//				center;
-	//			if(circle_interpolation_center_absol)
-	//				center=prev_pos+pipe[i].center-pipe[i-1].tool_orient.pos;
-	//			else
-	//				center=pipe[i].center-pipe[i-1].tool_orient.pos;
-	//			sprintf(buff,"%sN%i G0%i X%.3f Y%.3f Z%.3f I%.3f J%.3f\n",
-	//				pipe[i].auxfun.c_str(),
-	//				frame_number+=10,
-	//				pipe[i].normal[2]<0?3:2,
-	//					next_pos[0],next_pos[1],next_pos[2],
-	//					center[0],center[1],center[2]);
-	//				result_code+=buff;
+		}break;*/
+		//default:assert(false);
 
-	//		}break;*/
-	//		//default:assert(false);
-	//	}
-	//}
-	//size_t start = 0;
-	//int curr_frame = 0;
-	//do {
-	//	size_t curr_pos = result_code.find('\n', start);
-	//	if (curr_pos == std::string::npos)break;
-	//	char buff[100];
-	//	sprintf(buff, "\nN%i ", curr_frame);
-	//	curr_frame += 10;
-	//	result_code.replace(curr_pos, 1, buff);
-	//	start = curr_pos + strlen(buff);
-	//} while (true);
-	//delete buff;
+		return result_code;
+	}
 }
 
 
@@ -284,3 +257,37 @@ void CLSFProcessor::GetGCode(std::vector<TToolMovementElement> &pipe, std::strin
 ////	//result_code=G_code_header+result_code+G_code_footer;
 ////	//InsertGCodeHead(result_code,use_offset,use_machine_offset_string,use_machine_offset);
 ////}
+
+
+void CLSFProcessor::GetGCode(CLSFProcessor::Conf::TCommon conf, CLSFProcessor::Conf::TProcessor processor_conf, std::vector<TToolMovementElement> &pipe, const char* result_path)
+{
+	State state;
+
+	//if(curr_feed==0)curr_feed=1500;//TODO
+
+	state.curr_spndl_rpm = pipe[0].state.spndl_rpm;
+	state.curr_clw = pipe[0].state.clw;
+	state.new_coord = pipe[0].kinematics.v;
+
+	if (pipe.size() == 0)
+		return;
+
+	for (int c = 0; c < 5; c++)
+	{
+		state.curr_coord[c] = state.new_coord[c] + 2 * conf.gcode_axis_prop[c].repeat_tol;
+		state.curr_coord_machine[c] =
+			conf.gcode_axis_prop[c].rad_to_deg
+			? TAngle::FromRad(state.new_coord[c]).AsDeg()
+			: state.new_coord[c];
+	}
+
+	std::ofstream result_file(result_path, std::ios::binary);
+
+	for (int i = 0; i < pipe.size(); i++)
+	{
+		std::string line = ProcessLine(state, i == 0, pipe[i], conf, processor_conf);
+		result_file << line;
+	}
+
+	result_file.close();
+}

@@ -36,12 +36,13 @@ namespace CLSFProcessor
 		}
 		double AsDeg()
 		{
-			return value / 180.0 * M_PI;
+			return value * 180.0 / M_PI;
 		}
 		double To0_360Space()
 		{
 			auto angle = fmod(value, double(2 * M_PI));
-			if (angle < 0)angle = 2 * M_PI + angle;
+			if (angle < 0)
+				angle = 2 * M_PI + angle;
 			return angle;
 		}
 		static double DegToRad(double value)

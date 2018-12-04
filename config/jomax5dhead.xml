@@ -78,20 +78,20 @@
 			<force_rapid_change value="0" />
 			<lock_header value="" />
 			<lock_footer value="" />
-			<format value="" />
+			<format value=" C%.3f" />
 			<is_increment value="0" />
 			<repeat_tol value="0.001" />
-			<rad_to_deg value="0" />
+			<rad_to_deg value="1" />
 		</coord>
 		<coord>
 			<remove_repeat value="1" />
 			<force_rapid_change value="0" />
 			<lock_header value="" />
 			<lock_footer value="" />
-			<format value="" />
+			<format value=" A%.3f" />
 			<is_increment value="0" />
 			<repeat_tol value="0.001" />
-			<rad_to_deg value="0" />
+			<rad_to_deg value="1" />
 		</coord>
 	</coords>
 </common>

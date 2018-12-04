@@ -534,14 +534,72 @@ void TATPProcessor::TraceLine(std::vector<TPipelineElement> &pipe, int line)
 	//	}
 	//}
 }
+
+void TATPProcessor::SelectBestLine(std::vector<TPipelineElement> &pipe, std::vector<TToolMovementElement> &result_pipe)
+{
+	int line = 0;
+	int curr_line = 0;
+
+	double curr_A = pipe[0].machine_orient.kinematics_pair.variant[curr_line].v[ids.rot_node[1]];
+	double curr_C = pipe[0].machine_orient.kinematics_pair.variant[curr_line].v[ids.rot_node[0]];
+
+	for (int i = 0; i < pipe.size(); i++)
+	{
+		TKinematicsNode *curr = &pipe[i].machine_orient;
+		switch (pipe[i].state.mask)
+		{
+		case PrimitiveMask::LINE:
+		{
+			TToolMovementElement t;
+			t.tool_orient = pipe[i].tool_orient;
+			t.state = pipe[i].state;
+			t.kinematics = pipe[i].machine_orient.kinematics_pair.variant[curr_line];
+
+			/*t.A = curr_A;
+			t.C = curr_C;
+			t.any_C = pipe[i].machine_orient.any_C;*/
+
+			result_pipe.push_back(t);
+
+			if (i == pipe.size() - 1)break;
+			TKinematicsNode& next = pipe[i + 1].machine_orient;
+			/*if (curr->move_over_pole[line] || (!next->valid[curr_line]))
+			{
+				StandartRetractEngageChangePole(i, curr_line, line, curr_A, curr_C, pipe, result_pipe);
+
+				curr_A += curr->A_pole_change_delta[line];
+				curr_C += curr->C_pole_change_delta[line];
+				if (curr->change_line[curr_line])
+					curr_line = !curr_line;
+			}*/
+			curr_A += curr->A_inc[line];
+			curr_C += curr->C_inc[line];
+		}break;
+		case PrimitiveMask::CIRCLE:
+		{
+			TToolMovementElement t;
+			t.tool_orient = pipe[i].tool_orient;
+			t.state = pipe[i].state;
+			t.kinematics = pipe[i].machine_orient.kinematics_pair.variant[curr_line];
+
+			/*t.A = curr_A;
+			t.C = curr_C;*/
+			result_pipe.push_back(t);
+		}break;
+		default:assert(false);
+		}
+
+	}
+}
 //
 //void TATPProcessor::SelectBestLine(std::vector<TPipelineElement> &pipe, std::vector<TToolMovementElement> &result_pipe)
 //{
 //	int line = 0;
 //	int curr_line = line;
-//	if (!pipe[0].machine_orient.valid[curr_line])curr_line = !line;
-//	double curr_A = AToMachineRange(pipe[0].machine_orient.variant[curr_line].A);
-//	double curr_C = CToMachineRange(pipe[0].machine_orient.variant[curr_line].C);
+//	if (!pipe[0].machine_orient.valid[curr_line])
+//		curr_line = !line;
+//	double curr_A = AToMachineRange(pipe[0].machine_orient.kinematics_pair.variant[curr_line].v[ids.rot_node[1]]);
+//	double curr_C = CToMachineRange(pipe[0].machine_orient.kinematics_pair.variant[curr_line].v[ids.rot_node[0]]);
 //	for (int i = 0; i < pipe.size(); i++)
 //	{
 //		TKinematicsNode *curr = &pipe[i].machine_orient;
@@ -1094,7 +1152,7 @@ void TATPProcessor::PassThrough(std::vector<TCLSFToken> &atp_tokens, std::vector
 
 	//TraceLine(pipe, 0);
 	////TraceLine(pipe,1);
-	//SelectBestLine(pipe, result_pipe);
+	SelectBestLine(pipe, result_pipe);
 	//if (conf.use_subdivision)
 	//	Subdivide(result_pipe);//TODO для ТФЦ600 при разбивке поворота по C нужное перемещение по дуге не совпадает с прямой между позициями поэтому скачет X
 
